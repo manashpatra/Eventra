@@ -1,0 +1,456 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CSS Color Tokens
+   ─────────────────────────────────────────────────────────────────────────
+   ALL CSS colors are defined here via custom properties. To change a colour
+   across the whole app, edit it ONLY in these :root / .light-theme blocks.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* Brand */
+  --brand-orange: #FF8F00;
+  --brand-orange-dark: #E65100;
+  --brand-orange-deep: #BF360C;
+  --brand-gold: #FFB300;
+
+  /* Surface */
+  --surface-page: #0A0E1A;
+  --surface-paper: #111827;
+
+  /* Text */
+  --text-primary: #F1F5F9;
+  --text-secondary: #94A3B8;
+
+  /* Borders */
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-input: rgba(255, 255, 255, 0.12);
+
+  /* Overlays */
+  --overlay-brand-light: rgba(255, 143, 0, 0.08);
+  --overlay-brand-medium: rgba(255, 143, 0, 0.3);
+  --overlay-brand-strong: rgba(255, 143, 0, 0.15);
+  --overlay-white-light: rgba(255, 255, 255, 0.04);
+  --overlay-white-medium: rgba(255, 255, 255, 0.06);
+  --overlay-white-bold: rgba(255, 255, 255, 0.15);
+  --overlay-white-xbold: rgba(255, 255, 255, 0.25);
+
+  /* Selection */
+  --selection-bg: rgba(255, 143, 0, 0.3);
+  --selection-color: var(--brand-gold);
+
+  /* Gradients */
+  --gradient-brand: linear-gradient(135deg, #FF8F00 0%, #E65100 100%);
+  --gradient-brand-hover: linear-gradient(135deg, #E65100 0%, #BF360C 100%);
+
+  /* Scanner / QR overrides */
+  --scanner-swap-border: rgba(255, 143, 0, 0.3);
+  --scanner-file-border: rgba(255, 143, 0, 0.3);
+  --scanner-file-bg: rgba(255, 143, 0, 0.04);
+  --scanner-btn-shadow: rgba(255, 143, 0, 0.3);
+  --scanner-btn-shadow-hover: rgba(255, 143, 0, 0.4);
+  --scanner-focus-shadow: rgba(255, 143, 0, 0.15);
+  --scanner-text-color: rgba(241, 245, 249, 0.7);
+  --scanner-header-color: rgba(241, 245, 249, 0.5);
+  --scanner-stop-border: rgba(255, 255, 255, 0.15);
+  --scanner-stop-color: rgba(241, 245, 249, 0.8);
+  --scanner-select-bg: rgba(255, 255, 255, 0.06);
+  --scanner-select-border: rgba(255, 255, 255, 0.12);
+  --scanner-option-bg: #1a1f2e;
+}
+
+/* Light mode overrides */
+body.light-theme,
+[data-theme="light"] {
+  --surface-page: #F8FAFC;
+  --surface-paper: #FFFFFF;
+  --text-primary: #090D16;
+  --text-secondary: #334155;
+  --border-subtle: rgba(0, 0, 0, 0.08);
+  --border-input: rgba(0, 0, 0, 0.16);
+  --overlay-brand-light: rgba(230, 81, 0, 0.06);
+  --overlay-white-light: rgba(0, 0, 0, 0.04);
+  --overlay-white-medium: rgba(0, 0, 0, 0.06);
+  --scanner-text-color: rgba(9, 13, 22, 0.85);
+  --scanner-header-color: rgba(9, 13, 22, 0.7);
+  --scanner-stop-border: rgba(0, 0, 0, 0.2);
+  --scanner-stop-color: rgba(9, 13, 22, 0.85);
+  --scanner-select-bg: #FFFFFF;
+  --scanner-select-border: rgba(0, 0, 0, 0.2);
+  --scanner-option-bg: #FFFFFF;
+  --scanner-file-bg: rgba(230, 81, 0, 0.04);
+  --scanner-file-border: rgba(230, 81, 0, 0.3);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body, h1, h2, h3, h4, h5, h6, p, ul, ol, figure, blockquote, dl, dd {
+  margin: 0;
+}
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
+    Ubuntu, Cantarell, sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+  background-color: var(--surface-page);
+  color: var(--text-primary);
+  transition: background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1), color 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Light mode body background and text */
+body.light-theme,
+[data-theme="light"] body {
+  background-color: var(--surface-page);
+  color: var(--text-primary);
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* Smooth transition across core surface containers */
+body,
+#root,
+.MuiAppBar-root,
+.MuiDrawer-paper,
+.MuiPaper-root,
+.MuiCard-root,
+.MuiTableCell-root {
+  transition: background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              color 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Selection color */
+::selection {
+  background-color: var(--selection-bg);
+  color: var(--selection-color);
+}
+
+/* Focus outline for accessibility */
+*:focus-visible {
+  outline: 2px solid var(--brand-orange);
+  outline-offset: 2px;
+}
+
+/* Custom scrollbar styles */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--overlay-white-bold);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--overlay-white-xbold);
+}
+
+/* Print styles */
+@media print {
+  body {
+    background-color: white !important;
+    color: black !important;
+  }
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.4s ease-out;
+}
+
+.animate-slide-in {
+  animation: slideInLeft 0.3s ease-out;
+}
+
+/* ===== html5-qrcode Scanner Library Overrides ===== */
+
+/* Main scanner container */
+#reader {
+  border: none !important;
+  background: transparent !important;
+}
+
+/* Dashboard sections */
+#reader__dashboard_section,
+#reader__dashboard_section_csr,
+#reader__dashboard_section_fsr {
+  background: transparent !important;
+  padding: 12px 16px !important;
+}
+
+/* Header message */
+#reader__header_message {
+  border: none !important;
+  color: var(--scanner-header-color) !important;
+  font-family: 'Inter', sans-serif !important;
+  font-size: 0.78rem !important;
+  padding: 6px 0 !important;
+}
+
+/* ---- Scan Type Switcher (Camera ↔ File link) ---- */
+#reader__dashboard_section_swaplink {
+  display: inline-block !important;
+  padding: 9px 20px !important;
+  background: var(--overlay-white-light) !important;
+  color: var(--brand-orange) !important;
+  border: 1px solid var(--scanner-swap-border) !important;
+  border-radius: 10px !important;
+  font-family: 'Inter', sans-serif !important;
+  font-size: 0.82rem !important;
+  font-weight: 600 !important;
+  text-decoration: none !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  margin: 8px 4px !important;
+  letter-spacing: 0.01em !important;
+}
+
+#reader__dashboard_section_swaplink:hover {
+  background: var(--overlay-brand-light) !important;
+  border-color: var(--brand-orange) !important;
+  color: var(--brand-gold) !important;
+  text-decoration: none !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 2px 8px var(--overlay-brand-strong) !important;
+}
+
+/* ---- Primary Action Buttons ---- */
+#reader button,
+#reader__dashboard_section button,
+#reader__camera_permission_button {
+  background: var(--gradient-brand) !important;
+  color: #fff !important;
+  border: none !important;
+  border-radius: 10px !important;
+  padding: 10px 24px !important;
+  font-family: 'Inter', sans-serif !important;
+  font-weight: 600 !important;
+  font-size: 0.85rem !important;
+  cursor: pointer !important;
+  text-transform: none !important;
+  letter-spacing: 0.01em !important;
+  box-shadow: 0 2px 12px var(--scanner-btn-shadow) !important;
+  transition: all 0.2s ease !important;
+  margin: 6px 4px !important;
+}
+
+#reader button:hover,
+#reader__dashboard_section button:hover,
+#reader__camera_permission_button:hover {
+  background: var(--gradient-brand-hover) !important;
+  box-shadow: 0 4px 16px var(--scanner-btn-shadow-hover) !important;
+  transform: translateY(-1px) !important;
+}
+
+/* Stop Camera button — secondary outlined style */
+#html5-qrcode-button-camera-stop {
+  background: transparent !important;
+  border: 1px solid var(--scanner-stop-border) !important;
+  color: var(--scanner-stop-color) !important;
+  box-shadow: none !important;
+}
+
+#html5-qrcode-button-camera-stop:hover {
+  background: var(--overlay-white-medium) !important;
+  border-color: var(--brand-orange) !important;
+  color: var(--brand-orange) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+/* ---- Camera Select Dropdown ---- */
+#reader select,
+#reader__dashboard_section select,
+#html5-qrcode-select-camera {
+  background-color: var(--scanner-select-bg) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--scanner-select-border) !important;
+  border-radius: 8px !important;
+  padding: 8px 12px !important;
+  font-family: 'Inter', sans-serif !important;
+  font-size: 0.82rem !important;
+  font-weight: 500 !important;
+  outline: none !important;
+  cursor: pointer !important;
+  margin: 6px 4px !important;
+  -webkit-appearance: auto !important;
+  width: calc(100% - 8px) !important;
+}
+
+#reader select:focus,
+#reader__dashboard_section select:focus {
+  border-color: var(--brand-orange) !important;
+  box-shadow: 0 0 0 2px var(--scanner-focus-shadow) !important;
+}
+
+#reader select option {
+  background-color: var(--scanner-option-bg) !important;
+  color: var(--text-primary) !important;
+}
+
+/* ---- Text & Labels ---- */
+#reader span,
+#reader div {
+  color: var(--scanner-text-color) !important;
+  font-family: 'Inter', sans-serif !important;
+}
+
+/* ---- Links ---- */
+#reader a,
+#reader__dashboard_section a {
+  color: var(--brand-orange) !important;
+  text-decoration: none !important;
+  font-weight: 500 !important;
+}
+
+#reader a:hover {
+  color: var(--brand-gold) !important;
+  text-decoration: underline !important;
+}
+
+/* ---- Scan Region ---- */
+#reader__scan_region {
+  border: none !important;
+  background: transparent !important;
+}
+
+#reader__scan_region img {
+  opacity: 0.5 !important;
+}
+
+/* Hide the ugly default viewfinder from the library so only our custom animated brackets show */
+#qr-shaded-region {
+  display: none !important;
+}
+
+/* Force video to fill container properly on mobile */
+#scanner-viewfinder video,
+#reader video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+}
+
+/* ---- File Scan Input ---- */
+#reader input[type="file"] {
+  color: var(--scanner-text-color) !important;
+  font-family: 'Inter', sans-serif !important;
+  font-size: 0.82rem !important;
+  padding: 8px !important;
+  margin: 8px 0 !important;
+  border: 1px dashed var(--scanner-file-border) !important;
+  border-radius: 10px !important;
+  background: var(--scanner-file-bg) !important;
+  width: calc(100% - 8px) !important;
+  cursor: pointer !important;
+}
+
+/* File scan section layout */
+#reader__filescan_input {
+  text-align: center !important;
+  padding: 16px !important;
+}
+
+/* ---- Hide Powered-By Footer ---- */
+#reader__footer {
+  display: none !important;
+}
+
+/* ---- Light Mode Overrides for html5-qrcode ---- */
+body.light-theme #reader__header_message,
+[data-theme="light"] #reader__header_message {
+  color: var(--scanner-header-color) !important;
+}
+
+body.light-theme #reader select,
+body.light-theme #reader__dashboard_section select,
+body.light-theme #html5-qrcode-select-camera,
+[data-theme="light"] #reader select,
+[data-theme="light"] #reader__dashboard_section select,
+[data-theme="light"] #html5-qrcode-select-camera {
+  background-color: var(--scanner-select-bg) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--scanner-select-border) !important;
+}
+
+body.light-theme #reader select option,
+[data-theme="light"] #reader select option {
+  background-color: var(--scanner-option-bg) !important;
+  color: var(--text-primary) !important;
+}
+
+body.light-theme #reader span,
+body.light-theme #reader div,
+[data-theme="light"] #reader span,
+[data-theme="light"] #reader div {
+  color: var(--scanner-text-color) !important;
+}
+
+body.light-theme #reader input[type="file"],
+[data-theme="light"] #reader input[type="file"] {
+  color: var(--scanner-text-color) !important;
+  background: var(--scanner-file-bg) !important;
+  border-color: var(--scanner-file-border) !important;
+}
+
+body.light-theme #html5-qrcode-button-camera-stop,
+[data-theme="light"] #html5-qrcode-button-camera-stop {
+  border: 1px solid var(--scanner-stop-border) !important;
+  color: var(--scanner-stop-color) !important;
+}
+
+

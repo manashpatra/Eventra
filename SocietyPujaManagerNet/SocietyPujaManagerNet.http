@@ -1,0 +1,6 @@
+@SocietyPujaManagerNet_HostAddress = http://localhost:5116
+
+GET {{SocietyPujaManagerNet_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

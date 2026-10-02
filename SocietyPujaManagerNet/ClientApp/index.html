@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/png" href="/logo_square.png" />
+  <link rel="apple-touch-icon" href="/logo_square.png" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Manage Subscriptions, Donations, Food Coupons, Events and more" />
+  <meta name="theme-color" content="#0A0E1A" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <title>ETERNIS | DPC 2026-27</title>
+
+  <!-- Prevent flash of unstyled theme on page load -->
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('app_theme_mode');
+        var mode = saved;
+        if (!mode || (mode !== 'light' && mode !== 'dark')) {
+          mode = (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) ? 'light' : 'dark';
+        }
+        document.documentElement.setAttribute('data-theme', mode);
+        document.documentElement.style.colorScheme = mode;
+        if (mode === 'light') {
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute('content', '#FFFFFF');
+        }
+      } catch (e) { }
+    })();
+  </script>
+
+  <!-- Google Fonts: Inter & Roboto -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons" />
+
+  <!-- Hide Google Translate default UI — our custom LanguageSwitcher provides the interface -->
+  <style>
+    /* Hide the Google Translate top bar */
+    .goog-te-banner-frame, #goog-gt-tt, .goog-te-balloon-frame,
+    .goog-tooltip, .goog-tooltip:hover { display: none !important; }
+    .goog-text-highlight { background: none !important; box-shadow: none !important; }
+    /* Prevent page shift from translate frame */
+    body { top: 0 !important; position: static !important; }
+    .skiptranslate { display: none !important; }
+    /* Ensure html doesn't get a margin-top from translate */
+    html[class*="translated"] body { top: 0 !important; }
+    html[class*="translated"] { margin-top: 0 !important; }
+  </style>
+</head>
+
+<body>
+  <div id="root"></div>
+  <script type="module" src="/src/main.jsx"></script>
+</body>
+
+</html>
