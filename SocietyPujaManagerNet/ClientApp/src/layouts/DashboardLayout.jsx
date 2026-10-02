@@ -51,15 +51,16 @@ import {
   Public as PublicIcon,
   NotificationsActive as NotificationsActiveIcon,
   MenuBook as SouvenirIcon,
+  QrCode2 as QrCodeIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { getMasterConfig } from '../services/masterConfigService';
 
-import { useRegisterSW } from 'virtual:pwa-register/react';
 import InstallPrompt from '../components/InstallPrompt';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import ThemeToggle from '../components/ThemeToggle';
 import LanguageSelectionDialog from '../components/LanguageSelectionDialog';
+import DonationPaymentDialog from '../components/DonationPaymentDialog';
 import { LanguageProvider } from '../contexts/LanguageContext';
 import packageJson from '../../package.json';
 import { brand, surface, overlay, gradient, shadow, border, getRoleColor, text } from '../theme/colorTokens';
@@ -99,15 +100,11 @@ const DashboardLayout = () => {
     return saved !== null ? saved === 'true' : true;
   });
   const [anchorEl, setAnchorEl] = useState(null);
+  const [donationQrOpen, setDonationQrOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth();
   const [appConfig, setAppConfig] = useState(null);
-
-  const {
-    needRefresh: [needRefresh],
-    updateServiceWorker,
-  } = useRegisterSW();
 
   useEffect(() => {
     getMasterConfig().then(setAppConfig).catch(() => { });
@@ -130,8 +127,21 @@ const DashboardLayout = () => {
     if (isMobile) setMobileOpen(false);
   };
 
-  const handleProfileMenu = (event) => setAnchorEl(event.currentTarget);
+  const handleProfileMenu = (event) => {
+    setAnchorEl((prev) => (prev ? null : event.currentTarget));
+  };
   const handleCloseMenu = () => setAnchorEl(null);
+
+  const handleOpenDonationQr = (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    handleCloseMenu();
+    setTimeout(() => {
+      setDonationQrOpen(true);
+    }, 50);
+  };
 
   const handleLogout = async () => {
     handleCloseMenu();
@@ -363,33 +373,28 @@ const DashboardLayout = () => {
             {/* Profile Menu */}
             <Tooltip title={user?.displayName || user?.email || 'Account'}>
               <IconButton onClick={handleProfileMenu}>
-                <Badge
-                  color="error"
-                  variant="dot"
-                  invisible={!needRefresh}
-                  sx={{ '& .MuiBadge-badge': { right: 2, top: 2 } }}
+                <Avatar
+                  sx={{
+                    width: 36,
+                    height: 36,
+                    background: gradient.brand,
+                    fontSize: '0.9rem',
+                    fontWeight: 700,
+                    transition: 'all 0.2s ease-in-out',
+                    outline: Boolean(anchorEl) ? `2px solid ${brand.orange}` : '2px solid transparent',
+                    outlineOffset: '2px',
+                  }}
                 >
-                  <Avatar
-                    sx={{
-                      width: 36,
-                      height: 36,
-                      background: gradient.brand,
-                      fontSize: '0.9rem',
-                      fontWeight: 700,
-                      transition: 'all 0.2s ease-in-out',
-                      outline: Boolean(anchorEl) ? `2px solid ${brand.orange}` : '2px solid transparent',
-                      outlineOffset: '2px',
-                    }}
-                  >
-                    {(user?.displayName || user?.email || 'U')[0].toUpperCase()}
-                  </Avatar>
-                </Badge>
+                  {(user?.displayName || user?.email || 'U')[0].toUpperCase()}
+                </Avatar>
               </IconButton>
             </Tooltip>
             <Menu
               anchorEl={anchorEl}
               open={Boolean(anchorEl)}
               onClose={handleCloseMenu}
+              disableRestoreFocus
+              transitionDuration={{ enter: 150, exit: 0 }}
               transformOrigin={{ horizontal: 'right', vertical: 'top' }}
               anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
               slotProps={{
@@ -400,8 +405,8 @@ const DashboardLayout = () => {
                     filter: isDark
                       ? 'drop-shadow(0 8px 24px rgba(0, 0, 0, 0.6))'
                       : 'drop-shadow(0 8px 20px rgba(0, 0, 0, 0.12))',
-                    minWidth: 175,
-                    maxWidth: 215,
+                    minWidth: 185,
+                    maxWidth: 250,
                     borderRadius: '10px',
                     mt: 1.25,
                     p: 0.5,
@@ -429,23 +434,8 @@ const DashboardLayout = () => {
               }}
             >
               {/* User Profile Header (clean full-contrast Box) */}
-              <Box sx={{ px: 1.25, py: 1, outline: 'none' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
-                  <Avatar
-                    sx={{
-                      width: 32,
-                      height: 32,
-                      background: gradient.ctaGold,
-                      color: text.white,
-                      fontSize: '0.82rem',
-                      fontWeight: 700,
-                      boxShadow: `0 1px 6px ${overlay.brandGlow}`,
-                      flexShrink: 0,
-                    }}
-                  >
-                    {(user?.displayName || user?.email || 'U')[0].toUpperCase()}
-                  </Avatar>
-                  <Box sx={{ minWidth: 0, flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0.35 }}>
+              <Box sx={{ px: 1.25, py: 0.75, outline: 'none' }}>
+                <Box sx={{ minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0.35 }}>
                     {user?.role && (
                       <Chip
                         label={user.role}
@@ -465,58 +455,70 @@ const DashboardLayout = () => {
                         }}
                       />
                     )}
-                    <Tooltip title={user?.email || ''} arrow enterTouchDelay={50} placement="bottom-start">
+                    <Typography
+                      variant="subtitle2"
+                      sx={{
+                        fontWeight: 600,
+                        color: 'text.primary',
+                        fontSize: '0.82rem',
+                        lineHeight: 1.2,
+                        cursor: 'default',
+                        maxWidth: '100%',
+                      }}
+                      noWrap
+                    >
+                      {user?.displayName && user.displayName !== user.email
+                        ? user.displayName
+                        : user?.email ? user.email.split('@')[0] : (user?.displayName || 'User')}
+                    </Typography>
+                    {user?.email && (
                       <Typography
-                        variant="subtitle2"
+                        variant="caption"
                         sx={{
-                          fontWeight: 600,
-                          color: 'text.primary',
-                          fontSize: '0.82rem',
+                          color: 'text.secondary',
+                          fontSize: '0.72rem',
                           lineHeight: 1.2,
                           cursor: 'default',
+                          maxWidth: '100%',
                         }}
                         noWrap
                       >
-                        {user?.displayName || user?.email}
+                        {user.email}
                       </Typography>
-                    </Tooltip>
+                    )}
                   </Box>
                 </Box>
-              </Box>
 
-              <Divider sx={{ my: 0.35 }} />
+                <Divider sx={{ my: 0.35 }} />
 
               {/* Added Install App to Profile Menu */}
               <InstallPrompt variant="menuitem" onClick={handleCloseMenu} />
 
-              {/* Added Update App to Profile Menu */}
-              {needRefresh && (
-                <MenuItem
-                  onClick={() => {
-                    handleCloseMenu();
-                    updateServiceWorker(true);
-                  }}
-                  sx={{
-                    py: 0.45,
-                    px: 1.25,
-                    borderRadius: '6px',
-                    minHeight: 32,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 1,
-                  }}
-                >
-                  <Badge color="error" variant="dot">
-                    <SystemUpdateIcon sx={{ fontSize: 18, color: brand.orange }} />
-                  </Badge>
-                  <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.8rem', color: 'text.primary' }}>
-                    Update App
-                  </Typography>
-                </MenuItem>
-              )}
-
               {/* Theme Toggle */}
-              <ThemeToggle variant="menuitem" />
+              <ThemeToggle variant="menuitem" onClick={handleCloseMenu} />
+
+              {/* Donation & Payment Details QR */}
+              <MenuItem
+                onClick={handleOpenDonationQr}
+                sx={{
+                  py: 0.45,
+                  px: 1.25,
+                  borderRadius: '6px',
+                  minHeight: 32,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1,
+                  transition: 'all 0.15s ease-in-out',
+                  '&:hover': {
+                    backgroundColor: 'action.hover',
+                  },
+                }}
+              >
+                <QrCodeIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
+                <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.8rem', color: 'text.primary' }}>
+                  Donation QR
+                </Typography>
+              </MenuItem>
 
               <MenuItem
                 onClick={() => { handleCloseMenu(); navigate('/home'); }}
@@ -593,6 +595,13 @@ const DashboardLayout = () => {
           </Suspense>
         </Box>
       </Box>
+
+      {/* Donation Payment QR Dialog */}
+      <DonationPaymentDialog
+        open={donationQrOpen}
+        onClose={() => setDonationQrOpen(false)}
+        config={appConfig}
+      />
     </Box>
   );
 };

@@ -11,8 +11,8 @@ const ThemeToggle = ({ variant = 'button', onClick, sx = {} }) => {
   const { mode, isDark, toggleTheme } = useThemeMode();
 
   const handleToggle = (e) => {
-    toggleTheme();
     if (onClick) onClick(e);
+    toggleTheme();
   };
 
   const tooltipTitle = isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode';

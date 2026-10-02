@@ -1,5 +1,5 @@
 import React from 'react';
-import { Card, CardContent, Typography, Alert, Grid2 as Grid, TextField, FormControl, InputLabel, Select, MenuItem, Button, TableContainer, Paper, Table, TableHead, TableRow, TableCell, TableBody, Chip, IconButton, Box } from '@mui/material';
+import { Card, CardContent, Typography, Alert, Grid, TextField, FormControl, InputLabel, Select, MenuItem, Button, TableContainer, Paper, Table, TableHead, TableRow, TableCell, TableBody, Chip, IconButton, Box } from '@mui/material';
 import { Delete as DeleteIcon, Block as BlockIcon, CheckCircle as CheckCircleIcon, Edit as EditIcon, Cancel as CancelIcon } from '@mui/icons-material';
 
 const UserAccessTab = ({ config, newUserRole, setNewUserRole, addUserRole, removeUserRole, toggleUserStatus, editUserRole }) => {

@@ -624,14 +624,17 @@ const CulturalSection = () => {
                                 mode="event"
                                 pa={appConfig?.upiPayeeAddress}
                                 pn={appConfig?.upiPayeeName}
-                                mc={appConfig?.upiMerchantCode || '8699'}
+                                mc={appConfig?.upiMerchantCode}
                                 tn={selectedEvent.paymentPrefix || selectedEvent.title || 'Event'}
                                 societyName={appConfig?.societyName}
                                 committeeName={appConfig?.committeeName}
                                 year={appConfig?.currentYear}
+                                bankName={appConfig?.bankName}
                                 bankAccountNumber={appConfig?.bankAccountNumber}
                                 bankIfscCode={appConfig?.bankIfscCode}
+                                chequeFavourName={appConfig?.chequeFavourName}
                                 enabledUpiApps={appConfig?.enabledUpiApps}
+                                whatsappGroupLink={appConfig?.whatsappGroupLink}
                               />
                               <FormControlLabel
                                 control={<Checkbox checked={form.paymentConfirmed} onChange={(e) => setForm({ ...form, paymentConfirmed: e.target.checked })} />}

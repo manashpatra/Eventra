@@ -53,3 +53,41 @@ export const getAvailableFoodTypes = (dayConfig, mealType) => {
 
   return types;
 };
+
+// Print Assets (Digital Stamp & Signature) - stored in a dedicated record to keep main config lightweight
+let cachedPrintAssets = null;
+
+export const getPrintAssets = async (forceRefresh = false) => {
+  if (cachedPrintAssets && !forceRefresh) {
+    return cachedPrintAssets;
+  }
+  try {
+    const assets = await apiGet('/master-config/print-assets');
+    cachedPrintAssets = assets || {};
+    return cachedPrintAssets;
+  } catch (err) {
+    console.warn('Could not read print assets:', err);
+    return cachedPrintAssets || {};
+  }
+};
+
+export const getCachedPrintAssets = () => cachedPrintAssets || {};
+
+export const updatePrintAssets = async (data) => {
+  try {
+    await apiPost('/master-config/print-assets', data);
+    cachedPrintAssets = { ...(cachedPrintAssets || {}), ...data };
+  } catch (err) {
+    console.error('Error updating print assets:', err);
+    throw err;
+  }
+};
+
+export const getEffectivePrintConfig = async (baseConfig = {}) => {
+  const assets = await getPrintAssets();
+  return {
+    ...baseConfig,
+    stampImage: assets.stampImage || baseConfig.stampImage,
+    signatureImage: assets.signatureImage || baseConfig.signatureImage,
+  };
+};

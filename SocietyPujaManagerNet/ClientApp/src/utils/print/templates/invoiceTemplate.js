@@ -4,8 +4,22 @@ import { STAMP_IMAGE_BASE64, SIGNATURE_IMAGE_BASE64 } from '../../printConstants
 import { formatShortDate, formatDateTime } from '../../dateUtils';
 import { sz, getPrintHeaderHTML, getPrintHeaderStyles, formatCurrency } from '../shared';
 import { printTheme, brand } from '../../../theme/colorTokens';
+import { getPrintAssets } from '../../../services/masterConfigService';
 
 export async function getProFormaInvoiceHTML(dataObj, config = {}, forImage = false) {
+  let stampImg = config.stampImage;
+  let signatureImg = config.signatureImage;
+  if (!stampImg || !signatureImg) {
+    try {
+      const assets = await getPrintAssets();
+      stampImg = stampImg || assets?.stampImage || STAMP_IMAGE_BASE64;
+      signatureImg = signatureImg || assets?.signatureImage || SIGNATURE_IMAGE_BASE64;
+    } catch {
+      stampImg = stampImg || STAMP_IMAGE_BASE64;
+      signatureImg = signatureImg || SIGNATURE_IMAGE_BASE64;
+    }
+  }
+
   const invoiceDate = dataObj.invoiceDate
     ? formatShortDate(dataObj.invoiceDate, config?.dateFormat)
     : formatShortDate(new Date(), config?.dateFormat);
@@ -29,7 +43,7 @@ export async function getProFormaInvoiceHTML(dataObj, config = {}, forImage = fa
   let qrUrl = '';
   try {
     const QRCode = (await import('qrcode')).default;
-    qrUrl = await QRCode.toDataURL(upiUrl, { margin: 1, width: 120 });
+    qrUrl = await QRCode.toDataURL(upiUrl, { margin: 1, width: 440 });
   } catch (err) {
     console.error('Failed to generate QR code', err);
   }
@@ -269,21 +283,32 @@ export async function getProFormaInvoiceHTML(dataObj, config = {}, forImage = fa
         }
         #invoice-container .inv-bank-card .bank-left {
           padding: 10px 14px;
-          font-size: 11.5px;
-          line-height: 1.5;
+          font-size: 11px;
+          line-height: 1.6;
           flex: 1;
           background: #ffffff;
           border-right: 1px solid #0f172a;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          gap: 5px;
+          min-width: 0;
+        }
+        #invoice-container .inv-bank-card .bank-left .bank-row {
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
         #invoice-container .inv-bank-card .qr-right {
-          width: 140px;
-          padding: 6px 10px;
+          width: 228px;
+          padding: 6px 8px;
           background: #f8fafc;
           display: flex;
           flex-direction: column;
           align-items: center;
           justify-content: center;
           text-align: center;
+          flex-shrink: 0;
         }
 
         #invoice-container .inv-terms {
@@ -416,14 +441,18 @@ export async function getProFormaInvoiceHTML(dataObj, config = {}, forImage = fa
         ${!isReceived ? `
         <div class="inv-bank-card">
           <div class="bank-left">
-            <div>Beneficiary Account: <strong>${config.chequeFavourName || `Association of ${config.societyName || 'Society'} Flat Owners DA`}</strong></div>
-            <div>Bank: <strong>ICICI Bank</strong> | A/C No: <strong>627505031179</strong> | IFSC Code: <strong>ICIC0006275</strong></div>
-            <div>UPI ID: <strong>${config?.upiPayeeAddress || 'associationofeternisflatowners@icici'}</strong> | Society PAN: <strong>AAVCA0550H</strong></div>
-            <div>Mode of Settlement: <strong>Cheque / Demand Draft / NEFT / RTGS / UPI</strong></div>
+            <div style="font-weight: 700; font-size: 11.5px; color: #0f172a; margin-bottom: 2px;">Bank & Payment Particulars</div>
+            <div class="bank-row">Beneficiary Account: <strong>${config.chequeFavourName || `Association of ${config.societyName || 'Society'} Flat Owners`}</strong></div>
+            <div class="bank-row">Bank: <strong>${config.bankName || '-'}</strong></div>
+            <div class="bank-row">A/C No: <strong>${config.bankAccountNumber || '-'}</strong></div>
+            <div class="bank-row">IFSC Code: <strong>${config.bankIfscCode || '-'}</strong></div>
+            <div class="bank-row">Society PAN: <strong>${config.societyPan || '-'}</strong></div>
+            <div class="bank-row">UPI ID: <strong>${config?.upiPayeeAddress || '-'}</strong></div>
+            <div class="bank-row" style="margin-top: 2px; font-size: 10px; color: #64748b;">Mode of Settlement: <strong>Cheque / Demand Draft / NEFT / RTGS / UPI</strong></div>
           </div>
           <div class="qr-right">
-            ${qrUrl ? `<img src="${qrUrl}" alt="UPI QR" style="width: 82px; height: 82px; display: block; margin: 0 auto;"/>` : ''}
-            <div style="font-size: 9px; font-weight: 700; margin-top: 3px; color: #0f172a;">Scan to Pay via UPI</div>
+            ${qrUrl ? `<img src="${qrUrl}" alt="UPI QR" style="width: 215px; height: 215px; display: block; margin: 0 auto; border-radius: 4px;"/>` : ''}
+            <div style="font-size: 10.5px; font-weight: 700; margin-top: 5px; color: #0f172a;">Scan to Pay via UPI</div>
           </div>
         </div>
         ` : `
@@ -440,7 +469,7 @@ export async function getProFormaInvoiceHTML(dataObj, config = {}, forImage = fa
 
         <div class="inv-terms">
           ${!isReceived ? `
-            1. Payments should be made in favour of "${config.chequeFavourName || `Association of ${config.societyName || 'Society'} Flat Owners DA`}".<br/>
+            1. Payments should be made in favour of "${config.chequeFavourName || `Association of ${config.societyName || 'Society'} Flat Owners`}".<br/>
             2. This is a computer-generated pro forma invoice issued for sponsorship allocation.
           ` : `
             This invoice acknowledges full settlement of sponsorship deliverables for ${committeeName} ${societyName}.
@@ -451,14 +480,19 @@ export async function getProFormaInvoiceHTML(dataObj, config = {}, forImage = fa
       <!-- BOTTOM SIGNATURE SECTION -->
       <div>
         <div class="inv-signatures">
+          ${config.enableDigitalStamp !== false ? `
           <div class="sig-col" style="width: 150px;">
-            <img src="${STAMP_IMAGE_BASE64}" alt="Stamp" style="height: 95px; opacity: 0.95; display: block; margin: 0 auto;" />
-          </div>
+            <img src="${stampImg}" alt="Stamp" style="height: 95px; opacity: 0.95; display: block; margin: 0 auto;" />
+          </div>` : '<div style="width: 150px;"></div>'}
 
           <div class="sig-col" style="width: 200px;">
             <div style="font-weight: 700; font-size: 11.5px; color: #0f172a; margin-bottom: 4px;">For ${committeeName} ${societyName}</div>
-            <img src="${SIGNATURE_IMAGE_BASE64}" alt="Signature" style="height: 48px; margin: 4px auto; display: block;" />
-            <div class="sig-line" style="width: 180px;">Authorized Signatory</div>
+            ${config.enableDigitalSignature !== false ? `
+            <img src="${signatureImg}" alt="Signature" style="height: 48px; margin: 4px auto; display: block;" />
+            ` : `
+            <div style="height: 48px; border-bottom: 1px dashed #94a3b8; margin: 4px auto 8px auto; width: 160px;"></div>
+            `}
+            <div class="sig-line" style="width: 180px;">${config.signatoryDesignation || 'Authorized Signatory'}</div>
           </div>
         </div>
 

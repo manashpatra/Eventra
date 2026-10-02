@@ -1,7 +1,8 @@
+import React, { useState, useEffect } from 'react';
 import {
-  Card, CardContent, Typography, Grid2 as Grid, TextField, InputAdornment,
+  Card, CardContent, Typography, Grid, TextField, InputAdornment,
   Divider, Box, Button, FormControl, InputLabel, Select, MenuItem,
-  IconButton, Chip, Tooltip, Alert,
+  IconButton, Chip, Tooltip, Alert, CircularProgress,
 } from '@mui/material';
 import {
   Save as SaveIcon,
@@ -9,6 +10,10 @@ import {
   Add as AddIcon,
   Delete as DeleteIcon,
   Groups as GroupsIcon,
+  CloudUpload as UploadIcon,
+  RestartAlt as ResetIcon,
+  VerifiedUser as StampIcon,
+  Edit as SignatureIcon,
 } from '@mui/icons-material';
 import Switch from '@mui/material/Switch';
 import FormControlLabel from '@mui/material/FormControlLabel';
@@ -16,6 +21,9 @@ import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { getLocalISODate, getDatePickerFormat } from '../../../utils/dateUtils';
 import { UPI_APPS } from '../../../utils/upiHelper';
 import { brand, cultural, status, border } from '../../../theme/colorTokens';
+import { getPrintAssets, updatePrintAssets } from '../../../services/masterConfigService';
+import { STAMP_IMAGE_BASE64, SIGNATURE_IMAGE_BASE64 } from '../../../utils/printConstants';
+import { resizeImageFileToBase64 } from '../../../utils/imageUtils';
 
 // Common language presets for quick-add
 const LANGUAGE_PRESETS = [
@@ -259,38 +267,112 @@ const CulturalAgeGroupsConfigSection = ({ config, setConfig }) => {
 };
 
 const GeneralTab = ({ config, setConfig, saveSectionConfig }) => {
+  const [printAssets, setPrintAssets] = useState({ stampImage: '', signatureImage: '' });
+  const [assetsModified, setAssetsModified] = useState(false);
+  const [savingAssets, setSavingAssets] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+
+  useEffect(() => {
+    let isMounted = true;
+    getPrintAssets().then((assets) => {
+      if (isMounted && assets) {
+        setPrintAssets({
+          stampImage: assets.stampImage || '',
+          signatureImage: assets.signatureImage || '',
+        });
+      }
+    });
+    return () => { isMounted = false; };
+  }, []);
+
+  const handleStampUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadError('');
+    try {
+      const resizedBase64 = await resizeImageFileToBase64(file, 260, 260);
+      setPrintAssets((prev) => ({ ...prev, stampImage: resizedBase64 }));
+      setAssetsModified(true);
+    } catch (err) {
+      console.error('Failed to process stamp image:', err);
+      setUploadError('Failed to process stamp image. Please upload a valid image file.');
+    }
+  };
+
+  const handleSignatureUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadError('');
+    try {
+      const resizedBase64 = await resizeImageFileToBase64(file, 300, 100);
+      setPrintAssets((prev) => ({ ...prev, signatureImage: resizedBase64 }));
+      setAssetsModified(true);
+    } catch (err) {
+      console.error('Failed to process signature image:', err);
+      setUploadError('Failed to process signature image. Please upload a valid image file.');
+    }
+  };
+
+  const handleResetStamp = () => {
+    setPrintAssets((prev) => ({ ...prev, stampImage: '' }));
+    setAssetsModified(true);
+  };
+
+  const handleResetSignature = () => {
+    setPrintAssets((prev) => ({ ...prev, signatureImage: '' }));
+    setAssetsModified(true);
+  };
+
+  const handleSaveGeneral = async () => {
+    if (assetsModified) {
+      setSavingAssets(true);
+      try {
+        await updatePrintAssets(printAssets);
+        setAssetsModified(false);
+      } catch (err) {
+        console.error('Failed to update print assets:', err);
+      } finally {
+        setSavingAssets(false);
+      }
+    }
+    await saveSectionConfig('General Settings');
+  };
+
   return (
     <Card>
       <CardContent sx={{ p: 3 }}>
         <Typography variant="h6" sx={{ fontWeight: 600, mb: 3 }}>Society & Committee Info</Typography>
-        <Grid container spacing={3}>
-          <Grid size={{ xs: 12, md: 6 }}>
-            <TextField fullWidth label="Society Name" value={config.societyName || ''}
+        <Grid container spacing={2.5}>
+          <Grid size={{ xs: 12, sm: 6 }}>
+            <TextField fullWidth size="small" label="Society Name" value={config.societyName || ''}
               onChange={(e) => setConfig({ ...config, societyName: e.target.value })}
               helperText="Name of your society / housing complex"
             />
           </Grid>
-          <Grid size={{ xs: 12, md: 6 }}>
-            <TextField fullWidth label="Society Address" value={config.societyAddress || ''}
+          <Grid size={{ xs: 12, sm: 6 }}>
+            <TextField fullWidth size="small" label="Society Address" value={config.societyAddress || ''}
               onChange={(e) => setConfig({ ...config, societyAddress: e.target.value })}
               helperText="Full address shown on printed receipts"
             />
           </Grid>
-          <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-            <TextField fullWidth label="Committee Name" value={config.committeeName || ''}
-              onChange={(e) => setConfig({ ...config, committeeName: e.target.value })} />
+          <Grid size={{ xs: 12, sm: 4 }}>
+            <TextField fullWidth size="small" label="Committee Name" value={config.committeeName || ''}
+              onChange={(e) => setConfig({ ...config, committeeName: e.target.value })}
+              helperText="Organizing committee name" />
           </Grid>
-          <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-            <TextField fullWidth label="Committee Year" value={config.year || ''}
-              onChange={(e) => setConfig({ ...config, year: e.target.value })} />
+          <Grid size={{ xs: 12, sm: 4 }}>
+            <TextField fullWidth size="small" label="Committee Year" value={config.year || ''}
+              onChange={(e) => setConfig({ ...config, year: e.target.value })}
+              helperText="e.g. 2026-27" />
           </Grid>
-          <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-            <TextField fullWidth label="Subscription Amount" type="number" value={config.subscriptionAmount || 0}
+          <Grid size={{ xs: 12, sm: 4 }}>
+            <TextField fullWidth size="small" label="Subscription Amount" type="number" value={config.subscriptionAmount || 0}
               onChange={(e) => setConfig({ ...config, subscriptionAmount: Number(e.target.value) })}
               slotProps={{ input: { startAdornment: <InputAdornment position="start">₹</InputAdornment> } }}
+              helperText="Base subscription fee per flat"
             />
           </Grid>
-          <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+          <Grid size={{ xs: 12, sm: 4 }}>
             <DatePicker
               label="Puja Start Date"
               value={config.pujaStartDate ? new Date(config.pujaStartDate) : null}
@@ -305,18 +387,15 @@ const GeneralTab = ({ config, setConfig, saveSectionConfig }) => {
               slotProps={{ textField: { fullWidth: true, size: 'small', helperText: 'Start date of Durga Puja (for reminders)' } }}
             />
           </Grid>
-          <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-            <TextField fullWidth label="Normal Quota" type="number" value={config.normalQuota || 4}
+          <Grid size={{ xs: 12, sm: 4 }}>
+            <TextField fullWidth size="small" label="Normal Quota" type="number" value={config.normalQuota || 4}
               onChange={(e) => setConfig({ ...config, normalQuota: Number(e.target.value) })}
-              helperText="Max normal plates per flat per meal"
-              size="small" />
+              helperText="Max normal plates per flat per meal" />
           </Grid>
-          <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+          <Grid size={{ xs: 12, sm: 4 }}>
             <FormControl fullWidth size="small">
-              <InputLabel id="date-format-label">Date Format</InputLabel>
+              <InputLabel>Date Format</InputLabel>
               <Select
-                labelId="date-format-label"
-                id="date-format-select"
                 value={config.dateFormat || 'dd-MM-YYYY'}
                 label="Date Format"
                 onChange={(e) => setConfig({ ...config, dateFormat: e.target.value })}
@@ -355,55 +434,74 @@ const GeneralTab = ({ config, setConfig, saveSectionConfig }) => {
         <Divider sx={{ my: 4, borderColor: 'rgba(255,255,255,0.08)' }} />
 
         <Typography variant="h6" sx={{ fontWeight: 600, mb: 3 }}>Payment Settings</Typography>
-        <Grid container spacing={3}>
-          <Grid size={{ xs: 12, sm: 6, md: 6 }}>
-            <TextField fullWidth label="UPI Payee Address (VPA)" value={config.upiPayeeAddress || ''}
+        <Grid container spacing={2.5}>
+          <Grid size={{ xs: 12, sm: 6 }}>
+            <TextField fullWidth size="small" label="Society PAN" value={config.societyPan || ''}
+              onChange={(e) => setConfig({ ...config, societyPan: e.target.value.toUpperCase() })}
+              placeholder="e.g. ABCDE1234F"
+              helperText="Permanent Account Number for tax and invoice receipts"
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6 }}>
+            <TextField fullWidth size="small" label="Cheque In Favour Of" value={config.chequeFavourName || ''}
+              onChange={(e) => setConfig({ ...config, chequeFavourName: e.target.value })}
+              placeholder="e.g. Association of Flat Owners"
+              helperText="Beneficiary name for Cheque / Demand Draft payments"
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6 }}>
+            <TextField fullWidth size="small" label="Bank Name" value={config.bankName || ''}
+              onChange={(e) => setConfig({ ...config, bankName: e.target.value })}
+              placeholder="e.g. ICICI Bank, State Bank of India"
+              helperText="Name of the bank holding society accounts"
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6 }}>
+            <TextField fullWidth size="small" label="Bank Account Number" value={config.bankAccountNumber || ''}
+              onChange={(e) => setConfig({ ...config, bankAccountNumber: e.target.value })}
+              placeholder="e.g. 123456789012"
+              helperText="For direct NEFT/RTGS/IMPS transfers"
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6 }}>
+            <TextField fullWidth size="small" label="Bank IFSC Code" value={config.bankIfscCode || ''}
+              onChange={(e) => setConfig({ ...config, bankIfscCode: e.target.value.toUpperCase() })}
+              placeholder="e.g. SBIN0001234"
+              helperText="The IFSC code for the bank account"
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6 }}>
+            <TextField fullWidth size="small" label="UPI Payee Address (VPA)" value={config.upiPayeeAddress || ''}
               onChange={(e) => setConfig({ ...config, upiPayeeAddress: e.target.value })}
               placeholder="e.g. yourname@icici"
               helperText="The UPI VPA/ID to receive payments"
             />
           </Grid>
-          <Grid size={{ xs: 12, sm: 6, md: 6 }}>
-            <TextField fullWidth label="UPI Payee Name" value={config.upiPayeeName || ''}
+          <Grid size={{ xs: 12, sm: 6 }}>
+            <TextField fullWidth size="small" label="UPI Payee Name" value={config.upiPayeeName || ''}
               onChange={(e) => setConfig({ ...config, upiPayeeName: e.target.value })}
               placeholder="e.g. Committee Name"
               helperText="The display name shown in UPI apps"
             />
           </Grid>
-          <Grid size={{ xs: 12, sm: 6, md: 6 }}>
-            <TextField fullWidth label="UPI Payment Description" value={config.upiPayeeDescription || ''}
+          <Grid size={{ xs: 12, sm: 6 }}>
+            <TextField fullWidth size="small" label="UPI Payment Description" value={config.upiPayeeDescription || ''}
               onChange={(e) => setConfig({ ...config, upiPayeeDescription: e.target.value })}
               placeholder="e.g. Puja Subscription"
               helperText="Transaction note / description for UPI payments"
             />
           </Grid>
-          <Grid size={{ xs: 12, sm: 6, md: 6 }}>
-            <TextField fullWidth label="UPI Merchant Code (MC)" value={config.upiMerchantCode || '8699'}
+          <Grid size={{ xs: 12, sm: 6 }}>
+            <TextField fullWidth size="small" label="UPI Merchant Code (MC)" value={config.upiMerchantCode || ''}
               onChange={(e) => setConfig({ ...config, upiMerchantCode: e.target.value })}
-              placeholder="e.g. 8699"
-              helperText="Merchant code (MC) for UPI Intent"
-            />
-          </Grid>
-          <Grid size={{ xs: 12, sm: 6, md: 6 }}>
-            <TextField fullWidth label="Bank Account Number" value={config.bankAccountNumber || ''}
-              onChange={(e) => setConfig({ ...config, bankAccountNumber: e.target.value })}
-              placeholder="e.g. 627505031179"
-              helperText="For direct NEFT/RTGS/IMPS transfers"
-            />
-          </Grid>
-          <Grid size={{ xs: 12, sm: 6, md: 6 }}>
-            <TextField fullWidth label="Bank IFSC Code" value={config.bankIfscCode || ''}
-              onChange={(e) => setConfig({ ...config, bankIfscCode: e.target.value })}
-              placeholder="e.g. ICIC0006275"
-              helperText="The IFSC code for the bank account"
+              placeholder="e.g. 8699 (optional, leave empty if P2P)"
+              helperText="Optional Merchant code (MC) for UPI Intent"
             />
           </Grid>
           <Grid size={{ xs: 12 }}>
             <FormControl fullWidth size="small">
-              <InputLabel id="enabled-upi-apps-label">Enabled UPI Apps</InputLabel>
+              <InputLabel>Enabled UPI Apps</InputLabel>
               <Select
-                labelId="enabled-upi-apps-label"
-                id="enabled-upi-apps-select"
                 multiple
                 value={config.enabledUpiApps || UPI_APPS.filter(app => app.live).map(app => app.id)}
                 label="Enabled UPI Apps"
@@ -423,6 +521,233 @@ const GeneralTab = ({ config, setConfig, saveSectionConfig }) => {
                 ))}
               </Select>
             </FormControl>
+          </Grid>
+          <Grid size={{ xs: 12 }}>
+            <TextField fullWidth size="small" label="Festival WhatsApp Group Link" value={config.whatsappGroupLink || ''}
+              onChange={(e) => setConfig({ ...config, whatsappGroupLink: e.target.value })}
+              placeholder="e.g. https://chat.whatsapp.com/..."
+              helperText="Invite link for residents and contributors to share payment screenshots"
+            />
+          </Grid>
+        </Grid>
+
+        <Divider sx={{ my: 4, borderColor: (theme) => border.divider(theme.palette.mode === 'dark') }} />
+
+        {/* Digital Seal & Signatures Section */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
+          <StampIcon sx={{ color: brand.gold }} />
+          <Typography variant="h6" sx={{ fontWeight: 600 }}>Digital Seal & Signatures</Typography>
+        </Box>
+        <Typography variant="body2" sx={{ color: 'text.secondary', mb: 3 }}>
+          Configure digital stamp/seal and authorized signature for generated receipts and invoices. Images are automatically compressed and stored securely in dedicated print storage.
+        </Typography>
+
+        {uploadError && (
+          <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }} onClose={() => setUploadError('')}>
+            {uploadError}
+          </Alert>
+        )}
+
+        <Grid container spacing={3} sx={{ mb: 3 }}>
+          <Grid size={{ xs: 12, sm: 6, md: 4 }} sx={{ display: 'flex', alignItems: 'center' }}>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={config.enableDigitalStamp ?? true}
+                  onChange={(e) => setConfig({ ...config, enableDigitalStamp: e.target.checked })}
+                  color="primary"
+                />
+              }
+              label="Enable Digital Stamp / Seal"
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6, md: 4 }} sx={{ display: 'flex', alignItems: 'center' }}>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={config.enableDigitalSignature ?? true}
+                  onChange={(e) => setConfig({ ...config, enableDigitalSignature: e.target.checked })}
+                  color="primary"
+                />
+              }
+              label="Enable Digital Signature"
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 12, md: 4 }}>
+            <TextField
+              fullWidth
+              size="small"
+              label="Signatory Designation"
+              value={config.signatoryDesignation ?? 'Authorized Signatory'}
+              onChange={(e) => setConfig({ ...config, signatoryDesignation: e.target.value })}
+              placeholder="e.g. Authorized Signatory / Treasurer"
+              helperText="Title printed under the signature line"
+            />
+          </Grid>
+        </Grid>
+
+        {/* Upload Cards Grid */}
+        <Grid container spacing={3} sx={{ mb: 1 }}>
+          {/* Stamp Card */}
+          <Grid size={{ xs: 12, md: 6 }}>
+            <Box
+              sx={{
+                p: 2.5,
+                borderRadius: 2,
+                border: (theme) => `1px solid ${border.divider(theme.palette.mode === 'dark')}`,
+                background: (theme) => theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.01)',
+                display: 'flex',
+                flexDirection: 'column',
+                height: '100%',
+              }}
+            >
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                  Society / Committee Seal (Stamp)
+                </Typography>
+                <Chip
+                  label={printAssets.stampImage ? 'Custom Uploaded' : 'Default Stamp'}
+                  size="small"
+                  color={printAssets.stampImage ? 'primary' : 'default'}
+                  variant={printAssets.stampImage ? 'filled' : 'outlined'}
+                  sx={{ fontSize: '0.72rem', fontWeight: 600 }}
+                />
+              </Box>
+
+              {/* Preview Area with Checkered Background for Transparency */}
+              <Box
+                sx={{
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  p: 2,
+                  borderRadius: 1.5,
+                  minHeight: 120,
+                  maxHeight: 120,
+                  mb: 2,
+                  border: '1px dashed rgba(128,128,128,0.25)',
+                  backgroundColor: '#ffffff',
+                  backgroundImage: 'radial-gradient(rgba(0,0,0,0.08) 1px, transparent 1px)',
+                  backgroundSize: '12px 12px',
+                }}
+              >
+                <img
+                  src={printAssets.stampImage || STAMP_IMAGE_BASE64}
+                  alt="Stamp Preview"
+                  style={{ maxHeight: 95, maxWidth: '100%', objectFit: 'contain' }}
+                />
+              </Box>
+
+              <Typography variant="caption" sx={{ color: 'text.secondary', mb: 2, display: 'block' }}>
+                Recommended: Transparent PNG (max ~260x260 px). Automatically scaled & compressed on upload.
+              </Typography>
+
+              <Box sx={{ display: 'flex', gap: 1.5, mt: 'auto', flexWrap: 'wrap' }}>
+                <Button
+                  component="label"
+                  variant="outlined"
+                  size="small"
+                  startIcon={<UploadIcon />}
+                  sx={{ textTransform: 'none' }}
+                >
+                  Upload New Stamp
+                  <input type="file" hidden accept="image/*" onChange={handleStampUpload} />
+                </Button>
+                {printAssets.stampImage && (
+                  <Button
+                    variant="text"
+                    size="small"
+                    color="error"
+                    startIcon={<ResetIcon />}
+                    onClick={handleResetStamp}
+                    sx={{ textTransform: 'none' }}
+                  >
+                    Reset to Default
+                  </Button>
+                )}
+              </Box>
+            </Box>
+          </Grid>
+
+          {/* Signature Card */}
+          <Grid size={{ xs: 12, md: 6 }}>
+            <Box
+              sx={{
+                p: 2.5,
+                borderRadius: 2,
+                border: (theme) => `1px solid ${border.divider(theme.palette.mode === 'dark')}`,
+                background: (theme) => theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.01)',
+                display: 'flex',
+                flexDirection: 'column',
+                height: '100%',
+              }}
+            >
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                  Authorized Signatory Signature
+                </Typography>
+                <Chip
+                  label={printAssets.signatureImage ? 'Custom Uploaded' : 'Default Signature'}
+                  size="small"
+                  color={printAssets.signatureImage ? 'primary' : 'default'}
+                  variant={printAssets.signatureImage ? 'filled' : 'outlined'}
+                  sx={{ fontSize: '0.72rem', fontWeight: 600 }}
+                />
+              </Box>
+
+              {/* Preview Area with Checkered Background for Transparency */}
+              <Box
+                sx={{
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  p: 2,
+                  borderRadius: 1.5,
+                  minHeight: 120,
+                  maxHeight: 120,
+                  mb: 2,
+                  border: '1px dashed rgba(128,128,128,0.25)',
+                  backgroundColor: '#ffffff',
+                  backgroundImage: 'radial-gradient(rgba(0,0,0,0.08) 1px, transparent 1px)',
+                  backgroundSize: '12px 12px',
+                }}
+              >
+                <img
+                  src={printAssets.signatureImage || SIGNATURE_IMAGE_BASE64}
+                  alt="Signature Preview"
+                  style={{ maxHeight: 55, maxWidth: '100%', objectFit: 'contain' }}
+                />
+              </Box>
+
+              <Typography variant="caption" sx={{ color: 'text.secondary', mb: 2, display: 'block' }}>
+                Recommended: Transparent PNG (max ~300x100 px). Automatically scaled & compressed on upload.
+              </Typography>
+
+              <Box sx={{ display: 'flex', gap: 1.5, mt: 'auto', flexWrap: 'wrap' }}>
+                <Button
+                  component="label"
+                  variant="outlined"
+                  size="small"
+                  startIcon={<UploadIcon />}
+                  sx={{ textTransform: 'none' }}
+                >
+                  Upload New Signature
+                  <input type="file" hidden accept="image/*" onChange={handleSignatureUpload} />
+                </Button>
+                {printAssets.signatureImage && (
+                  <Button
+                    variant="text"
+                    size="small"
+                    color="error"
+                    startIcon={<ResetIcon />}
+                    onClick={handleResetSignature}
+                    sx={{ textTransform: 'none' }}
+                  >
+                    Reset to Default
+                  </Button>
+                )}
+              </Box>
+            </Box>
           </Grid>
         </Grid>
 
@@ -460,8 +785,14 @@ const GeneralTab = ({ config, setConfig, saveSectionConfig }) => {
         <CulturalAgeGroupsConfigSection config={config} setConfig={setConfig} />
 
         <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3 }}>
-          <Button variant="contained" startIcon={<SaveIcon />} onClick={() => saveSectionConfig('General Settings')} size="small">
-            Save General Settings
+          <Button
+            variant="contained"
+            startIcon={savingAssets ? <CircularProgress size={18} color="inherit" /> : <SaveIcon />}
+            onClick={handleSaveGeneral}
+            disabled={savingAssets}
+            size="small"
+          >
+            {savingAssets ? 'Saving Settings...' : 'Save General Settings'}
           </Button>
         </Box>
       </CardContent>

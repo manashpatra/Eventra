@@ -1,6 +1,6 @@
 import React from 'react';
 import { Box, Typography, Button, Container, Paper } from '@mui/material';
-import { ErrorOutline as ErrorIcon } from '@mui/icons-material';
+import { ErrorOutlined as ErrorIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 
 const AccessDenied = () => {

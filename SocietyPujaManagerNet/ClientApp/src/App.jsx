@@ -5,7 +5,7 @@ import { ThemeModeProvider } from './contexts/ThemeModeContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ProcessingProvider } from './contexts/ProcessingContext';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFnsV3';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import DashboardLayout from './layouts/DashboardLayout';
 import Login from './pages/admin/Login';
 import SleekLoader from './components/SleekLoader';

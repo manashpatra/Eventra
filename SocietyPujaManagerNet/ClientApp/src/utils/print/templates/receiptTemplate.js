@@ -2,8 +2,13 @@ import { STAMP_IMAGE_BASE64, SIGNATURE_IMAGE_BASE64 } from '../../printConstants
 import { sz, getPrintHeaderHTML, getPrintHeaderStyles, formatCurrency } from '../shared';
 import { formatShortDate, formatDateTime } from '../../dateUtils';
 import { printTheme } from '../../../theme/colorTokens';
+import { getCachedPrintAssets } from '../../../services/masterConfigService';
 
 export function getReceiptHTML(dataObj, config = {}, forImage = false, receiptTitle = 'Receipt') {
+  const cachedAssets = getCachedPrintAssets();
+  const stampImg = config.stampImage || cachedAssets.stampImage || STAMP_IMAGE_BASE64;
+  const signatureImg = config.signatureImage || cachedAssets.signatureImage || SIGNATURE_IMAGE_BASE64;
+
   // Determine if this is subscription, donation, or sponsorship based on title
   const isSubscription = receiptTitle.toLowerCase().includes('subscription');
   const isSponsorship = receiptTitle.toLowerCase().includes('sponsorship');
@@ -151,10 +156,16 @@ export function getReceiptHTML(dataObj, config = {}, forImage = false, receiptTi
       <div class="gratitude-msg">${gratitudeMsg}</div>
       <div class="blessing">Jai Maa Durga! 🌺</div>
       ${isExternal ? `<div style="margin-top: 30px; display: flex; justify-content: flex-end; align-items: flex-end; padding-right: 20px;">
-        <img src="${STAMP_IMAGE_BASE64}" alt="Stamp" style="height: 90px; margin-right: 15px; opacity: 0.9;" />
+        ${config.enableDigitalStamp !== false ? `
+        <img src="${stampImg}" alt="Stamp" style="height: 90px; margin-right: 15px; opacity: 0.9;" />
+        ` : ''}
         <div style="text-align: center;">
-          <img src="${SIGNATURE_IMAGE_BASE64}" alt="Signature" style="height: 40px; margin-bottom: 5px; display: block; margin-left: auto; margin-right: auto;" />
-          <div style="border-top: 1px solid ${printTheme.black}; padding-top: 5px; width: 150px; font-weight: bold; font-size: ${sz(forImage, '10px', '11px')};">Authorized Signatory</div>
+          ${config.enableDigitalSignature !== false ? `
+          <img src="${signatureImg}" alt="Signature" style="height: 40px; margin-bottom: 5px; display: block; margin-left: auto; margin-right: auto;" />
+          ` : `
+          <div style="height: 40px; border-bottom: 1px dashed ${printTheme.black}; margin-bottom: 5px; width: 150px; margin-left: auto; margin-right: auto;"></div>
+          `}
+          <div style="border-top: 1px solid ${printTheme.black}; padding-top: 5px; width: 150px; font-weight: bold; font-size: ${sz(forImage, '10px', '11px')};">${config.signatoryDesignation || 'Authorized Signatory'}</div>
         </div>
       </div>`: ''}
       <div class="timestamp">Generated on ${formatDateTime(new Date(), config?.dateFormat)}</div>

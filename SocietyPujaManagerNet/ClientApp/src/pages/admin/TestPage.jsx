@@ -277,9 +277,12 @@ const TestPage = () => {
                   committeeName={appConfig?.committeeName}
                   year={appConfig?.year}
                   isTestPage={true}
+                  bankName={appConfig?.bankName}
                   bankAccountNumber={appConfig?.bankAccountNumber}
                   bankIfscCode={appConfig?.bankIfscCode}
+                  chequeFavourName={appConfig?.chequeFavourName}
                   enabledUpiApps={appConfig?.enabledUpiApps}
+                  whatsappGroupLink={appConfig?.whatsappGroupLink}
                 />
                 <Button
                   variant="contained"

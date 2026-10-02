@@ -2,7 +2,7 @@ import React from 'react';
 import {
   Card, CardContent, Typography, Box, Button, Alert, TableContainer,
   Table, TableHead, TableRow, TableCell, TableBody, TextField, Switch,
-  IconButton, Grid2 as Grid, Chip, MenuItem, FormControl, InputLabel,
+  IconButton, Grid, Chip, MenuItem, FormControl, InputLabel,
   Select, FormHelperText
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';

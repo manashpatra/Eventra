@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SocietyPujaManagerNet.Data;
@@ -87,6 +87,35 @@ public class MasterConfigController : ControllerBase
         {
             Console.WriteLine("Error syncing roles: " + ex.Message);
         }
+
+        return Ok(data);
+    }
+
+    [HttpGet("print-assets")]
+    public async Task<IActionResult> GetPrintAssets()
+    {
+        var config = await _db.MasterConfigs.FindAsync("print-assets");
+        if (config == null) return Ok(new { });
+        return Ok(JsonSerializer.Deserialize<object>(config.ConfigJson));
+    }
+
+    [HttpPost("print-assets")]
+    [HttpPut("print-assets")]
+    [Authorize]
+    public async Task<IActionResult> UpdatePrintAssets([FromBody] object data)
+    {
+        var json = JsonSerializer.Serialize(data);
+        var existing = await _db.MasterConfigs.FindAsync("print-assets");
+        if (existing == null)
+        {
+            existing = new MasterConfig { Id = "print-assets" };
+            _db.MasterConfigs.Add(existing);
+        }
+
+        existing.ConfigJson = json;
+        existing.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+        await _audit.LogAsync("UPDATE", "PrintAssets", "print-assets", data, User);
 
         return Ok(data);
     }

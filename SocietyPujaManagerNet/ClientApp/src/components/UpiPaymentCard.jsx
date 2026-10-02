@@ -14,7 +14,6 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions,
   IconButton,
   Divider,
 } from '@mui/material';
@@ -27,6 +26,8 @@ import {
   AccountBalance as BankIcon,
   ContentCopy as CopyIcon,
   Close as CloseIcon,
+  Check as CheckIcon,
+  Share as ShareIcon,
 } from '@mui/icons-material';
 import QRCode from 'qrcode';
 import { buildUpiUrl, isMobileDevice, UPI_APPS, getIntentUrl } from '../utils/upiHelper';
@@ -47,7 +48,7 @@ import { brand, text, surface, overlay, gradient, border, shadow, thirdParty, ge
  * @param {string}  [props.pa]        – UPI payee address (from master config)
  * @param {string}  [props.pn]        – UPI payee name (from master config)
  */
-const UpiPaymentCard = ({ flatNumber, amount: fixedAmount, mode = 'subscription', pa, pn, tn, mc, societyName = '', committeeName = '', year = '', isTestPage = false, bankAccountNumber = '', bankIfscCode = '', enabledUpiApps }) => {
+const UpiPaymentCard = ({ flatNumber, amount: fixedAmount, mode = 'subscription', pa, pn, tn, mc, societyName = '', committeeName = '', year = '', isTestPage = false, bankName = '', bankAccountNumber = '', bankIfscCode = '', chequeFavourName = '', enabledUpiApps, showIntentButtons = true, showImportantNotice = true, whatsappGroupLink }) => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
   const isMobileBreakpoint = useMediaQuery(theme.breakpoints.down('sm'));
@@ -65,16 +66,113 @@ const UpiPaymentCard = ({ flatNumber, amount: fixedAmount, mode = 'subscription'
   );
 
   const [copied, setCopied] = useState(false);
+  const [copiedField, setCopiedField] = useState(null);
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const [qrImageUrl, setQrImageUrl] = useState('');
   const [bankDetailsOpen, setBankDetailsOpen] = useState(false);
 
-  const handleCopyDetails = (text, label) => {
-    navigator.clipboard.writeText(text).then(() => {
-      setSnackbarMessage(`${label} copied!`);
+  const copyToClipboard = async (textToCopy) => {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(textToCopy);
+        return true;
+      }
+    } catch (err) {
+      console.warn('navigator.clipboard failed, attempting fallback...', err);
+    }
+
+    try {
+      const textArea = document.createElement('textarea');
+      textArea.value = textToCopy;
+      textArea.style.position = 'fixed';
+      textArea.style.left = '-9999px';
+      textArea.style.top = '-9999px';
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      const successful = document.execCommand('copy');
+      document.body.removeChild(textArea);
+      return successful;
+    } catch (err) {
+      console.error('Fallback copy failed:', err);
+      return false;
+    }
+  };
+
+  const getFormattedBankDetailsText = () => {
+    const title = `${societyName || committeeName || 'Puja'} - Bank & Payment Details`;
+    const accName = chequeFavourName || pn || committeeName || societyName || '';
+    const lines = [
+      `🏛️ *${title}*`,
+      year ? `📅 Year: ${year}` : null,
+      '──────────────────────',
+      '🏦 *Net Banking Details:*',
+      bankName ? `• Bank Name: ${bankName}` : null,
+      accName ? `• Account Name: ${accName}` : null,
+      bankAccountNumber ? `• A/C Number: ${bankAccountNumber}` : null,
+      bankIfscCode ? `• IFSC Code: ${bankIfscCode}` : null,
+      pa ? '' : null,
+      pa ? '📱 *Direct UPI Details:*' : null,
+      pa ? `• UPI ID: ${pa}` : null,
+      pn ? `• UPI Payee: ${pn}` : null,
+      '──────────────────────',
+      'Mode of Payment: Net Banking (NEFT/RTGS/IMPS) / Direct UPI',
+    ].filter(line => line !== null);
+
+    return lines.join('\n');
+  };
+
+  const handleCopyDetails = async (textToCopy, label, fieldKey) => {
+    if (!textToCopy || textToCopy === 'N/A') return;
+    const ok = await copyToClipboard(textToCopy);
+    if (ok) {
+      setCopiedField(fieldKey);
+      setSnackbarMessage(`${label} copied to clipboard!`);
       setSnackbarOpen(true);
-    }).catch(err => console.error('Failed to copy: ', err));
+      setTimeout(() => setCopiedField(curr => (curr === fieldKey ? null : curr)), 2000);
+    }
+  };
+
+  const handleCopyAllBankDetails = async () => {
+    const textToCopy = getFormattedBankDetailsText();
+    const ok = await copyToClipboard(textToCopy);
+    if (ok) {
+      setCopiedField('all');
+      setSnackbarMessage('All bank & payment details copied to clipboard!');
+      setSnackbarOpen(true);
+      setTimeout(() => setCopiedField(curr => (curr === 'all' ? null : curr)), 2500);
+    }
+  };
+
+  const handleWhatsAppShare = () => {
+    const textToShare = getFormattedBankDetailsText();
+    const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(textToShare)}`;
+    window.open(whatsappUrl, '_blank');
+  };
+
+  const handleShareBankDetails = async () => {
+    const textToShare = getFormattedBankDetailsText();
+    const title = `${societyName || committeeName || 'Puja'} Bank Details`;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title,
+          text: textToShare,
+        });
+        setSnackbarMessage('Bank details shared successfully!');
+        setSnackbarOpen(true);
+        return;
+      } catch (err) {
+        if (err.name === 'AbortError') {
+          return;
+        }
+        console.warn('Web Share failed, falling back to WhatsApp:', err);
+      }
+    }
+
+    handleWhatsAppShare();
   };
 
   useEffect(() => {
@@ -210,13 +308,13 @@ const UpiPaymentCard = ({ flatNumber, amount: fixedAmount, mode = 'subscription'
   const handleAppClick = (e, app) => {
     if (app.requiresQrFallback) {
       e.preventDefault();
-      
+
       if (!qrImageUrl) {
         setSnackbarMessage('Generating QR code, please wait...');
         setSnackbarOpen(true);
         return;
       }
-      
+
       try {
         const link = document.createElement('a');
         const formattedFlat = flatNumber ? flatNumber.replace(/[^a-zA-Z0-9]/g, '_') : 'flat';
@@ -225,10 +323,10 @@ const UpiPaymentCard = ({ flatNumber, amount: fixedAmount, mode = 'subscription'
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-        
+
         setSnackbarMessage(`QR Saved! Open ${app.name}, tap 'Scan Any QR' -> 'Upload from Gallery'`);
         setSnackbarOpen(true);
-        
+
         // Launch app home screen after short delay
         setTimeout(() => {
           window.location.href = `intent://#Intent;package=${app.androidPackage};end`;
@@ -424,7 +522,7 @@ const UpiPaymentCard = ({ flatNumber, amount: fixedAmount, mode = 'subscription'
                   lineHeight: 1.4,
                 }}
               >
-                {mobile ? (
+                {mobile && showIntentButtons ? (
                   <>
                     📱 <strong>Tap/Click the QR code</strong> to download it, then upload in your UPI app to pay.
                   </>
@@ -437,7 +535,7 @@ const UpiPaymentCard = ({ flatNumber, amount: fixedAmount, mode = 'subscription'
             </Box>
 
             {/* UPI Intent Buttons (Mobile Only) */}
-            {mobile && (
+            {mobile && showIntentButtons && (
               <Box sx={{ width: '100%', mt: 0, textAlign: 'center' }}>
                 <Typography
                   variant="caption"
@@ -487,7 +585,7 @@ const UpiPaymentCard = ({ flatNumber, amount: fixedAmount, mode = 'subscription'
                         py: 0.5,
                         fontSize: '0.75rem',
                         boxShadow: `0 2px 8px ${overlay.neutralStrong(isDark)}`,
-                        border: (app.color?.toLowerCase() === text.white.toLowerCase() || app.color?.replace('#','').toLowerCase() === 'fff') ? `1px solid ${border.divider(isDark)}` : 'none',
+                        border: (app.color?.toLowerCase() === text.white.toLowerCase() || app.color?.replace('#', '').toLowerCase() === 'fff') ? `1px solid ${border.divider(isDark)}` : 'none',
                         '&:hover': {
                           backgroundColor: app.color,
                           filter: 'brightness(0.95)',
@@ -541,69 +639,77 @@ const UpiPaymentCard = ({ flatNumber, amount: fixedAmount, mode = 'subscription'
           </Box>
 
           {/* Reminder to share screenshot */}
-          <Box
-            sx={{
-              mb: 0,
-              borderRadius: '12px',
-              overflow: 'hidden',
-              border: '1px solid rgba(255,179,0,0.2)',
-            }}
-          >
+          {showImportantNotice && (
             <Box
               sx={{
-                px: 1.5,
-                py: 0.8,
-                background: `linear-gradient(135deg, ${brand.orange}, ${brand.gold})`,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 1,
+                mb: 0,
+                borderRadius: '12px',
+                overflow: 'hidden',
+                border: '1px solid rgba(255,179,0,0.2)',
               }}
             >
-              <Typography sx={{ fontSize: '0.75rem', fontWeight: 800, color: text.dark, letterSpacing: '0.02em' }}>
-                📌 Important
-              </Typography>
-            </Box>
-            <Box sx={{ px: 1.5, py: 1, background: 'rgba(255,179,0,0.06)' }}>
-              <Typography
-                component="div"
-                variant="body2"
+              <Box
                 sx={{
-                  color: 'text.primary',
-                  fontSize: '0.75rem',
-                  lineHeight: 1.5,
+                  px: 1.5,
+                  py: 0.8,
+                  background: `linear-gradient(135deg, ${brand.orange}, ${brand.gold})`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1,
                 }}
               >
-                To help us update your records, please share your payment{' '}
-                <Box component="span" sx={{ fontWeight: 700, color: brand.gold }}>screenshot</Box>{' '}
-                in our{' '}
-                <Box
-                  component="a"
-                  href="https://chat.whatsapp.com/HXD59bWQg1bAWNa7r6DEQq"
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <Typography sx={{ fontSize: '0.75rem', fontWeight: 800, color: text.dark, letterSpacing: '0.02em' }}>
+                  📌 Important
+                </Typography>
+              </Box>
+              <Box sx={{ px: 1.5, py: 1, background: 'rgba(255,179,0,0.06)' }}>
+                <Typography
+                  component="div"
+                  variant="body2"
                   sx={{
-                    fontWeight: 800,
-                    color: thirdParty.whatsapp,
-                    textDecoration: 'none',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 0.4,
-                    verticalAlign: 'middle',
-                    '&:hover': { textDecoration: 'underline' }
+                    color: 'text.primary',
+                    fontSize: '0.75rem',
+                    lineHeight: 1.5,
                   }}
                 >
-                  <WhatsAppIcon sx={{ fontSize: 16 }} />
-                  Festival WhatsApp Group
-                </Box>.
-                {amountNum > 2000 && (
-                  <>
-                    <Box component="hr" sx={{ my: 0.5, border: 'none', borderTop: '1px dashed rgba(255,179,0,0.2)' }} />
-                    ⚠️ <strong>UPI limits gallery QR uploads to ₹2,000.</strong> For higher amounts, please scan directly from another device.
-                  </>
-                )}
-              </Typography>
+                  To help us update your records, please share your payment{' '}
+                  <Box component="span" sx={{ fontWeight: 700, color: brand.gold }}>screenshot</Box>{' '}
+                  {whatsappGroupLink ? (
+                    <>
+                      in our{' '}
+                      <Box
+                        component="a"
+                        href={whatsappGroupLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        sx={{
+                          fontWeight: 800,
+                          color: thirdParty.whatsapp,
+                          textDecoration: 'none',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 0.4,
+                          verticalAlign: 'middle',
+                          '&:hover': { textDecoration: 'underline' }
+                        }}
+                      >
+                        <WhatsAppIcon sx={{ fontSize: 16 }} />
+                        Festival WhatsApp Group
+                      </Box>.
+                    </>
+                  ) : (
+                    <>with the committee/organizers.</>
+                  )}
+                  {amountNum > 2000 && (
+                    <>
+                      <Box component="hr" sx={{ my: 0.5, border: 'none', borderTop: '1px dashed rgba(255,179,0,0.2)' }} />
+                      ⚠️ <strong>UPI limits gallery QR uploads to ₹2,000.</strong> For higher amounts, please scan directly from another device.
+                    </>
+                  )}
+                </Typography>
+              </Box>
             </Box>
-          </Box>
+          )}
 
           {/* Toast Notification */}
           <Snackbar
@@ -649,11 +755,67 @@ const UpiPaymentCard = ({ flatNumber, amount: fixedAmount, mode = 'subscription'
             <BankIcon sx={{ color: accentColor }} />
             <Typography variant="subtitle1" sx={{ fontWeight: 700, color: isDark ? text.white : 'text.primary' }}>Bank Details</Typography>
           </Box>
-          <IconButton size="small" onClick={() => setBankDetailsOpen(false)} sx={{ color: 'text.secondary' }}>
-            <CloseIcon fontSize="small" />
-          </IconButton>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <Tooltip title={copiedField === 'all' ? 'Copied all details!' : 'Copy all details'} arrow>
+              <IconButton
+                size="small"
+                onClick={handleCopyAllBankDetails}
+                aria-label="Copy all bank details"
+                sx={{
+                  color: copiedField === 'all' ? 'success.main' : 'text.secondary',
+                  transition: 'all 0.2s',
+                  '&:hover': { color: accentColor, backgroundColor: `${accentColor}15` },
+                }}
+              >
+                {copiedField === 'all' ? <CheckIcon fontSize="small" /> : <CopyIcon fontSize="small" />}
+              </IconButton>
+            </Tooltip>
+
+            <Tooltip title="Share on WhatsApp" arrow>
+              <IconButton
+                size="small"
+                onClick={handleWhatsAppShare}
+                aria-label="Share on WhatsApp"
+                sx={{
+                  color: '#25D366',
+                  transition: 'all 0.2s',
+                  '&:hover': { backgroundColor: '#25D36620' },
+                }}
+              >
+                <WhatsAppIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+
+            <Tooltip title="Share details" arrow>
+              <IconButton
+                size="small"
+                onClick={handleShareBankDetails}
+                aria-label="Share bank details"
+                sx={{
+                  color: 'text.secondary',
+                  transition: 'all 0.2s',
+                  '&:hover': { color: accentColor, backgroundColor: `${accentColor}15` },
+                }}
+              >
+                <ShareIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+
+            <IconButton
+              size="small"
+              onClick={() => setBankDetailsOpen(false)}
+              aria-label="Close"
+              sx={{
+                color: 'text.secondary',
+                transition: 'all 0.2s',
+                '&:hover': { color: 'text.primary' },
+              }}
+            >
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          </Box>
         </DialogTitle>
-        <DialogContent>
+        <DialogContent sx={{ pb: 2.5 }}>
           <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2, lineHeight: 1.5 }}>
             You can pay your {isDonation ? 'donation' : 'subscription'} directly using Net Banking or Direct UPI.
           </Typography>
@@ -661,12 +823,48 @@ const UpiPaymentCard = ({ flatNumber, amount: fixedAmount, mode = 'subscription'
           <Box sx={{ backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)', borderRadius: '12px', p: 1.5, border: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.08)' }}>
             <Typography variant="subtitle2" sx={{ color: accentColor, fontWeight: 700, mb: 1.5 }}>Net Banking</Typography>
 
+            {bankName && (
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1, minWidth: 0 }}>
+                <Box sx={{ minWidth: 0, pr: 1 }}>
+                  <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>Bank Name</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 600, wordBreak: 'break-word' }}>{bankName}</Typography>
+                </Box>
+                <Tooltip title={copiedField === 'bankName' ? 'Copied!' : 'Copy Bank Name'} arrow>
+                  <IconButton
+                    size="small"
+                    onClick={() => handleCopyDetails(bankName, 'Bank Name', 'bankName')}
+                    sx={{
+                      color: copiedField === 'bankName' ? 'success.main' : 'text.secondary',
+                      flexShrink: 0,
+                      transition: 'all 0.2s',
+                      '&:hover': { color: accentColor },
+                    }}
+                  >
+                    {copiedField === 'bankName' ? <CheckIcon sx={{ fontSize: 16 }} /> : <CopyIcon sx={{ fontSize: 16 }} />}
+                  </IconButton>
+                </Tooltip>
+              </Box>
+            )}
+
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1, minWidth: 0 }}>
               <Box sx={{ minWidth: 0, pr: 1 }}>
                 <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>Account Name</Typography>
-                <Typography variant="body2" sx={{ fontWeight: 600, wordBreak: 'break-word' }}>{pn || committeeName || societyName || 'N/A'}</Typography>
+                <Typography variant="body2" sx={{ fontWeight: 600, wordBreak: 'break-word' }}>{chequeFavourName || pn || committeeName || societyName || 'N/A'}</Typography>
               </Box>
-              <IconButton size="small" onClick={() => handleCopyDetails(pn || committeeName || societyName || 'N/A', 'Account Name')} sx={{ color: 'text.secondary', flexShrink: 0 }}><CopyIcon sx={{ fontSize: 16 }} /></IconButton>
+              <Tooltip title={copiedField === 'accountName' ? 'Copied!' : 'Copy Account Name'} arrow>
+                <IconButton
+                  size="small"
+                  onClick={() => handleCopyDetails(chequeFavourName || pn || committeeName || societyName || '', 'Account Name', 'accountName')}
+                  sx={{
+                    color: copiedField === 'accountName' ? 'success.main' : 'text.secondary',
+                    flexShrink: 0,
+                    transition: 'all 0.2s',
+                    '&:hover': { color: accentColor },
+                  }}
+                >
+                  {copiedField === 'accountName' ? <CheckIcon sx={{ fontSize: 16 }} /> : <CopyIcon sx={{ fontSize: 16 }} />}
+                </IconButton>
+              </Tooltip>
             </Box>
 
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1, minWidth: 0 }}>
@@ -674,7 +872,20 @@ const UpiPaymentCard = ({ flatNumber, amount: fixedAmount, mode = 'subscription'
                 <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>A/C Number</Typography>
                 <Typography variant="body2" sx={{ fontWeight: 600 }}>{bankAccountNumber || 'N/A'}</Typography>
               </Box>
-              <IconButton size="small" onClick={() => handleCopyDetails(bankAccountNumber || 'N/A', 'Account Number')} sx={{ color: 'text.secondary', flexShrink: 0 }}><CopyIcon sx={{ fontSize: 16 }} /></IconButton>
+              <Tooltip title={copiedField === 'bankAccountNumber' ? 'Copied!' : 'Copy A/C Number'} arrow>
+                <IconButton
+                  size="small"
+                  onClick={() => handleCopyDetails(bankAccountNumber, 'Account Number', 'bankAccountNumber')}
+                  sx={{
+                    color: copiedField === 'bankAccountNumber' ? 'success.main' : 'text.secondary',
+                    flexShrink: 0,
+                    transition: 'all 0.2s',
+                    '&:hover': { color: accentColor },
+                  }}
+                >
+                  {copiedField === 'bankAccountNumber' ? <CheckIcon sx={{ fontSize: 16 }} /> : <CopyIcon sx={{ fontSize: 16 }} />}
+                </IconButton>
+              </Tooltip>
             </Box>
 
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', minWidth: 0 }}>
@@ -682,7 +893,20 @@ const UpiPaymentCard = ({ flatNumber, amount: fixedAmount, mode = 'subscription'
                 <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>IFSC Code</Typography>
                 <Typography variant="body2" sx={{ fontWeight: 600 }}>{bankIfscCode || 'N/A'}</Typography>
               </Box>
-              <IconButton size="small" onClick={() => handleCopyDetails(bankIfscCode || 'N/A', 'IFSC Code')} sx={{ color: 'text.secondary', flexShrink: 0 }}><CopyIcon sx={{ fontSize: 16 }} /></IconButton>
+              <Tooltip title={copiedField === 'bankIfscCode' ? 'Copied!' : 'Copy IFSC Code'} arrow>
+                <IconButton
+                  size="small"
+                  onClick={() => handleCopyDetails(bankIfscCode, 'IFSC Code', 'bankIfscCode')}
+                  sx={{
+                    color: copiedField === 'bankIfscCode' ? 'success.main' : 'text.secondary',
+                    flexShrink: 0,
+                    transition: 'all 0.2s',
+                    '&:hover': { color: accentColor },
+                  }}
+                >
+                  {copiedField === 'bankIfscCode' ? <CheckIcon sx={{ fontSize: 16 }} /> : <CopyIcon sx={{ fontSize: 16 }} />}
+                </IconButton>
+              </Tooltip>
             </Box>
           </Box>
 
@@ -694,7 +918,20 @@ const UpiPaymentCard = ({ flatNumber, amount: fixedAmount, mode = 'subscription'
                 <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>UPI ID</Typography>
                 <Typography variant="body2" sx={{ fontWeight: 600, wordBreak: 'break-all' }}>{pa || 'N/A'}</Typography>
               </Box>
-              <IconButton size="small" onClick={() => handleCopyDetails(pa || 'N/A', 'UPI ID')} sx={{ color: 'text.secondary', flexShrink: 0 }}><CopyIcon sx={{ fontSize: 16 }} /></IconButton>
+              <Tooltip title={copiedField === 'upiId' ? 'Copied!' : 'Copy UPI ID'} arrow>
+                <IconButton
+                  size="small"
+                  onClick={() => handleCopyDetails(pa, 'UPI ID', 'upiId')}
+                  sx={{
+                    color: copiedField === 'upiId' ? 'success.main' : 'text.secondary',
+                    flexShrink: 0,
+                    transition: 'all 0.2s',
+                    '&:hover': { color: accentColor },
+                  }}
+                >
+                  {copiedField === 'upiId' ? <CheckIcon sx={{ fontSize: 16 }} /> : <CopyIcon sx={{ fontSize: 16 }} />}
+                </IconButton>
+              </Tooltip>
             </Box>
           </Box>
         </DialogContent>

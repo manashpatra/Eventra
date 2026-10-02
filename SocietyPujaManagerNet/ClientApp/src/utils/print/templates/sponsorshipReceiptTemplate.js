@@ -3,8 +3,13 @@ import { STAMP_IMAGE_BASE64, SIGNATURE_IMAGE_BASE64 } from '../../printConstants
 import { formatShortDate, formatDateTime } from '../../dateUtils';
 import { sz, getPrintHeaderHTML, getPrintHeaderStyles, formatCurrency } from '../shared';
 import { printTheme, brand } from '../../../theme/colorTokens';
+import { getCachedPrintAssets } from '../../../services/masterConfigService';
 
 export function getSponsorshipReceiptHTML(dataObj, config = {}, forImage = false) {
+  const cachedAssets = getCachedPrintAssets();
+  const stampImg = config.stampImage || cachedAssets.stampImage || STAMP_IMAGE_BASE64;
+  const signatureImg = config.signatureImage || cachedAssets.signatureImage || SIGNATURE_IMAGE_BASE64;
+
   const receiptDate = dataObj.transactionDate
     ? formatShortDate(dataObj.transactionDate, config?.dateFormat)
     : (dataObj.invoiceDate ? formatShortDate(dataObj.invoiceDate, config?.dateFormat) : formatShortDate(new Date(), config?.dateFormat));
@@ -403,9 +408,9 @@ export function getSponsorshipReceiptHTML(dataObj, config = {}, forImage = false
             ${isCash ? `
               <div>Settlement Mode: <strong>Cash Payment</strong> | Status: <strong style="color: #15803d;">RECEIVED IN FULL & ACCOUNTED</strong></div>
             ` : `
-              <div>Beneficiary Account: <strong>${config.chequeFavourName || `Association of ${config.societyName || 'Society'} Flat Owners DA`}</strong></div>
-              <div>Bank: <strong>ICICI Bank</strong> | A/C No: <strong>627505031179</strong> | IFSC Code: <strong>ICIC0006275</strong></div>
-              <div>Society PAN: <strong>AAVCA0550H</strong></div>
+              <div>Beneficiary Account: <strong>${config.chequeFavourName || `Association of ${config.societyName || 'Society'} Flat Owners`}</strong></div>
+              <div>Bank: <strong>${config.bankName || '-'}</strong> | A/C No: <strong>${config.bankAccountNumber || '-'}</strong> | IFSC Code: <strong>${config.bankIfscCode || '-'}</strong></div>
+              <div>Society PAN: <strong>${config.societyPan || '-'}</strong></div>
               <div>Settlement Mode: <strong>${dataObj.paymentMode || 'Net Banking'}</strong> | Status: <strong style="color: #15803d;">REALIZED & CREDITED IN FULL</strong></div>
             `}
           </div>
@@ -426,14 +431,19 @@ export function getSponsorshipReceiptHTML(dataObj, config = {}, forImage = false
       <!-- BOTTOM SIGNATURE SECTION -->
       <div>
         <div class="rcpt-signatures">
+          ${config.enableDigitalStamp !== false ? `
           <div class="sig-col" style="width: 150px;">
-            <img src="${STAMP_IMAGE_BASE64}" alt="Stamp" style="height: 95px; opacity: 0.95; display: block; margin: 0 auto;" />
-          </div>
+            <img src="${stampImg}" alt="Stamp" style="height: 95px; opacity: 0.95; display: block; margin: 0 auto;" />
+          </div>` : '<div style="width: 150px;"></div>'}
 
           <div class="sig-col" style="width: 200px;">
             <div style="font-weight: 700; font-size: 11.5px; color: #0f172a; margin-bottom: 4px;">For ${committeeName} ${societyName}</div>
-            <img src="${SIGNATURE_IMAGE_BASE64}" alt="Signature" style="height: 48px; margin: 4px auto; display: block;" />
-            <div class="sig-line" style="width: 180px;">Treasurer / Signatory</div>
+            ${config.enableDigitalSignature !== false ? `
+            <img src="${signatureImg}" alt="Signature" style="height: 48px; margin: 4px auto; display: block;" />
+            ` : `
+            <div style="height: 48px; border-bottom: 1px dashed #94a3b8; margin: 4px auto 8px auto; width: 160px;"></div>
+            `}
+            <div class="sig-line" style="width: 180px;">${config.signatoryDesignation || 'Treasurer / Signatory'}</div>
           </div>
         </div>
 
