@@ -39,6 +39,7 @@ import {
   ToggleButton,
   ToggleButtonGroup,
   Autocomplete,
+  TableSortLabel,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -59,6 +60,7 @@ import {
   Refresh as RefreshIcon,
   ArrowUpward as ArrowUpwardIcon,
   ArrowDownward as ArrowDownwardIcon,
+  Print as PrintIcon,
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { useSnackbar } from 'notistack';
@@ -83,12 +85,29 @@ import {
   brand,
   statusBadge,
   cashInHandPalette,
+  printTheme,
 } from '../../theme/colorTokens';
 import {
   getLocalISODate,
   formatDate,
   getDatePickerFormat,
 } from '../../utils/dateUtils';
+import { printHTML } from '../../utils/print/core';
+import {
+  getPrintHeaderHTML,
+  getPrintFooterHTML,
+  getPrintHeaderStyles,
+} from '../../utils/print/shared';
+
+const escapeHtml = (unsafe) => {
+  if (unsafe === null || unsafe === undefined) return '';
+  return String(unsafe)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+};
 
 const formatCurrency = (val) =>
   new Intl.NumberFormat('en-IN', {
@@ -168,6 +187,16 @@ const CashInHand = () => {
   const [txPage, setTxPage] = useState(0);
   const [txRowsPerPage, setTxRowsPerPage] = useState(50);
   const [txTypeFilter, setTxTypeFilter] = useState('All');
+
+  // Sorting for transactions
+  const [txSortField, setTxSortField] = useState('date');
+  const [txSortOrder, setTxSortOrder] = useState('desc');
+
+  const handleRequestSort = (field) => {
+    const isAsc = txSortField === field && txSortOrder === 'asc';
+    setTxSortOrder(isAsc ? 'desc' : 'asc');
+    setTxSortField(field);
+  };
 
   // Dialog states
   const [memberDialogOpen, setMemberDialogOpen] = useState(false);
@@ -295,13 +324,29 @@ const CashInHand = () => {
     if (txTypeFilter !== 'All') {
       result = result.filter((t) => t.type === txTypeFilter);
     }
+
+    const getTxDate = (t) => {
+      const d = t?.date || t?.transactionDate;
+      if (!d) return '';
+      if (typeof d === 'string') return d.slice(0, 10);
+      if (d instanceof Date) return getLocalISODate(d);
+      if (d.seconds !== undefined) return getLocalISODate(new Date(d.seconds * 1000));
+      return '';
+    };
+
     if (startDate) {
       const s = getLocalISODate(startDate);
-      result = result.filter((t) => (t.date || t.createdAt || '') >= s);
+      result = result.filter((t) => {
+        const d = getTxDate(t);
+        return d ? d >= s : false;
+      });
     }
     if (endDate) {
       const e = getLocalISODate(endDate);
-      result = result.filter((t) => (t.date || t.createdAt || '').slice(0, 10) <= e);
+      result = result.filter((t) => {
+        const d = getTxDate(t);
+        return d ? d <= e : false;
+      });
     }
     if (debouncedSearchTerm) {
       const query = debouncedSearchTerm.toLowerCase();
@@ -314,8 +359,42 @@ const CashInHand = () => {
           (t.fromMemberName || '').toLowerCase().includes(query)
       );
     }
+
+    result.sort((a, b) => {
+      let cmp = 0;
+      if (txSortField === 'date') {
+        const dateA = getTxDate(a);
+        const dateB = getTxDate(b);
+        if (dateA !== dateB) {
+          cmp = dateA.localeCompare(dateB);
+        } else {
+          const timeA = new Date(a?.createdAt || 0).getTime();
+          const timeB = new Date(b?.createdAt || 0).getTime();
+          cmp = timeA - timeB;
+        }
+      } else if (txSortField === 'amount') {
+        cmp = (Number(a?.amount) || 0) - (Number(b?.amount) || 0);
+      } else if (txSortField === 'member') {
+        cmp = (a?.memberName || '').localeCompare(b?.memberName || '');
+      }
+
+      if (cmp !== 0) {
+        return txSortOrder === 'desc' ? -cmp : cmp;
+      }
+
+      // Default tie-breaker: transaction date descending, then createdAt descending
+      const dateA = getTxDate(a);
+      const dateB = getTxDate(b);
+      if (dateA !== dateB) {
+        return dateB.localeCompare(dateA);
+      }
+      const timeA = new Date(a?.createdAt || 0).getTime();
+      const timeB = new Date(b?.createdAt || 0).getTime();
+      return timeB - timeA;
+    });
+
     return result;
-  }, [transactions, txTypeFilter, startDate, endDate, debouncedSearchTerm]);
+  }, [transactions, txTypeFilter, startDate, endDate, debouncedSearchTerm, txSortField, txSortOrder]);
 
   // Suggestions for autocomplete from userRoles
   const userSuggestions = useMemo(() => {
@@ -576,6 +655,339 @@ const CashInHand = () => {
     });
   };
 
+  // Handler for Printing Ledger (All records regardless of pagination)
+  const handlePrintLedger = (txList = filteredTransactions, member = null) => {
+    if (!txList || txList.length === 0) {
+      enqueueSnackbar('No transactions to print', { variant: 'info' });
+      return;
+    }
+
+    const d = new Date();
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = d.toLocaleString('en-GB', { month: 'short' }).toUpperCase();
+    const year = d.getFullYear();
+    const prefix = config?.societyName ? config.societyName.toUpperCase().replace(/\s+/g, '_') : 'SOCIETY';
+    const reportSuffix = member ? `${member.name.toUpperCase().replace(/\s+/g, '_')}_LEDGER` : 'CASH_LEDGER';
+    const docTitle = `${prefix}_${reportSuffix}_${day}_${month}_${year}`;
+
+    // Filters summary
+    const filterInfo = [];
+    if (member) {
+      filterInfo.push(`Member: ${member.name} (${member.role || 'Member'})`);
+      filterInfo.push(`Current Balance: ${formatCurrency(member.currentBalance)}`);
+    } else {
+      if (startDate && endDate) {
+        filterInfo.push(`Date Range: ${formatDate(startDate, config?.dateFormat)} to ${formatDate(endDate, config?.dateFormat)}`);
+      } else if (startDate) {
+        filterInfo.push(`From Date: ${formatDate(startDate, config?.dateFormat)}`);
+      } else if (endDate) {
+        filterInfo.push(`To Date: ${formatDate(endDate, config?.dateFormat)}`);
+      } else {
+        filterInfo.push('Date: All Dates');
+      }
+
+      if (txTypeFilter !== 'All') {
+        const typeLabels = {
+          ADD: 'Added (+)',
+          SUBTRACT: 'Subtracted (-)',
+          TRANSFER_IN: 'Transfer In',
+          TRANSFER_OUT: 'Transfer Out',
+        };
+        filterInfo.push(`Type: ${typeLabels[txTypeFilter] || txTypeFilter}`);
+      }
+
+      if (searchTerm.trim()) {
+        filterInfo.push(`Search: "${searchTerm.trim()}"`);
+      }
+    }
+
+    // Totals in printed transactions
+    let totalAdded = 0;
+    let totalSubtracted = 0;
+    let totalTransfers = 0;
+
+    txList.forEach((t) => {
+      const amt = Number(t.amount) || 0;
+      if (t.type === 'ADD' || t.type === 'TRANSFER_IN') {
+        totalAdded += amt;
+      }
+      if (t.type === 'SUBTRACT' || t.type === 'TRANSFER_OUT') {
+        totalSubtracted += amt;
+      }
+      if (t.type === 'TRANSFER_IN' || t.type === 'TRANSFER_OUT') {
+        totalTransfers += amt;
+      }
+    });
+
+    const activeCashMembers = (members || []).filter((m) => (Number(m.currentBalance) || 0) > 0);
+
+    const rowsHtml = txList
+      .map((t, idx) => {
+        const isAdd = t.type === 'ADD' || t.type === 'TRANSFER_IN';
+        const typeLabel =
+          t.type === 'ADD'
+            ? 'ADD (+)'
+            : t.type === 'SUBTRACT'
+            ? 'SUBTRACT (-)'
+            : t.type === 'TRANSFER_IN'
+            ? 'TRANSFER IN'
+            : t.type === 'TRANSFER_OUT'
+            ? 'TRANSFER OUT'
+            : t.type;
+
+        let memberDetails = escapeHtml(t.memberName || '');
+        if (t.toMemberName) memberDetails += `<div class="sub-text">To: ${escapeHtml(t.toMemberName)}</div>`;
+        if (t.fromMemberName) memberDetails += `<div class="sub-text">From: ${escapeHtml(t.fromMemberName)}</div>`;
+
+        const amountColor = isAdd ? '#15803d' : '#b91c1c';
+        const amountSign = isAdd ? '+' : '-';
+
+        return `
+          <tr>
+            <td style="text-align: center; width: 35px;">${idx + 1}</td>
+            <td style="white-space: nowrap;">${escapeHtml(formatDate(t.date || t.createdAt, config?.dateFormat))}</td>
+            <td>${memberDetails}</td>
+            <td style="text-align: center;"><span class="type-badge type-${t.type?.toLowerCase()}">${escapeHtml(typeLabel)}</span></td>
+            <td style="text-align: right; font-weight: 700; color: ${amountColor}; white-space: nowrap;">
+              ${amountSign} ${formatCurrency(t.amount)}
+            </td>
+            <td style="text-align: right; white-space: nowrap; color: #475569;">
+              ${t.balanceAfter !== undefined ? formatCurrency(t.balanceAfter) : '—'}
+            </td>
+            <td>${escapeHtml(t.reason || '—')}</td>
+            <td>${escapeHtml(t.notes || '—')}</td>
+            <td style="white-space: nowrap;">${escapeHtml(t.recordedBy || 'Admin')}</td>
+          </tr>
+        `;
+      })
+      .join('');
+
+    const pageTitle = member
+      ? `Cash Ledger — ${escapeHtml(member.name)}`
+      : 'Cash in Hand — Transaction Ledger';
+
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+  <title>${escapeHtml(docTitle)}</title>
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; color: ${printTheme.text}; background: #fff; }
+    ${getPrintHeaderStyles()}
+    .report-title {
+      text-align: center;
+      color: ${brand.orangeDark};
+      font-size: 18px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin: 10px 0 6px;
+    }
+    .filters-bar {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+      font-size: 11px;
+      color: #64748b;
+      margin-bottom: 14px;
+      padding-bottom: 8px;
+      border-bottom: 1px dashed #cbd5e1;
+    }
+    .filters-bar span {
+      background: #f1f5f9;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+    .summary-grid {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .summary-card {
+      flex: 1;
+      padding: 8px 12px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      text-align: center;
+    }
+    .summary-card .val {
+      font-size: 15px;
+      font-weight: 800;
+      margin-bottom: 2px;
+    }
+    .summary-card .lbl {
+      font-size: 10px;
+      text-transform: uppercase;
+      color: #64748b;
+      font-weight: 600;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0;
+      font-size: 11px;
+    }
+    th {
+      background: #f1f5f9;
+      color: #1e293b;
+      padding: 6px 8px;
+      border: 1px solid #cbd5e1;
+      font-size: 11px;
+      font-weight: 700;
+      text-align: left;
+    }
+    td {
+      padding: 5px 8px;
+      border: 1px solid #e2e8f0;
+      vertical-align: middle;
+      font-size: 11px;
+    }
+    tr:nth-child(even) { background-color: #f8fafc; }
+    .sub-text {
+      font-size: 9px;
+      color: #64748b;
+      margin-top: 1px;
+    }
+    .type-badge {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+    }
+    .section-title {
+      font-size: 12px;
+      font-weight: 800;
+      color: #1e293b;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin: 14px 0 6px;
+      padding-bottom: 3px;
+      border-bottom: 1.5px solid #cbd5e1;
+    }
+    .type-add { background: #dcfce7; color: #166534; }
+    .type-subtract { background: #fee2e2; color: #991b1b; }
+    .type-transfer_in, .type-transfer_out { background: #e0f2fe; color: #075985; }
+    .total-row td {
+      font-weight: 800;
+      background: #f1f5f9;
+      border-top: 2px solid #94a3b8;
+      font-size: 11px;
+    }
+    @media print {
+      body { padding: 8px; }
+      @page { margin: 12mm 8mm; size: landscape; }
+      th, td { font-size: 10px !important; padding: 4px 6px !important; }
+      .section-title { margin-top: 10px; margin-bottom: 4px; }
+    }
+  </style>
+</head>
+<body>
+  ${getPrintHeaderHTML(config)}
+  <div class="report-title">${pageTitle}</div>
+  <div class="filters-bar">
+    ${filterInfo.map((f) => `<span>${escapeHtml(f)}</span>`).join('')}
+    <span>Total Records: ${txList.length}</span>
+  </div>
+
+  <div class="summary-grid">
+    <div class="summary-card">
+      <div class="val" style="color: ${brand.orangeDark};">${formatCurrency(member ? member.currentBalance : stats?.totalCashInHand)}</div>
+      <div class="lbl">${member ? 'Member Balance' : 'Total Cash in Hand (Current)'}</div>
+    </div>
+    <div class="summary-card">
+      <div class="val" style="color: #15803d;">+ ${formatCurrency(totalAdded)}</div>
+      <div class="lbl">Total Inflow / Added</div>
+    </div>
+    <div class="summary-card">
+      <div class="val" style="color: #b91c1c;">- ${formatCurrency(totalSubtracted)}</div>
+      <div class="lbl">Total Outflow / Disbursed</div>
+    </div>
+    <div class="summary-card">
+      <div class="val" style="color: #0284c7;">${formatCurrency(totalTransfers)}</div>
+      <div class="lbl">Transfers</div>
+    </div>
+  </div>
+
+  ${!member && activeCashMembers && activeCashMembers.length > 0 ? `
+    <div class="section-title">Members Holding Cash (${activeCashMembers.length} Members)</div>
+    <table>
+      <thead>
+        <tr>
+          <th style="text-align: center; width: 30px;">#</th>
+          <th>Member Name</th>
+          <th>Role</th>
+          <th>Contact Number</th>
+          <th style="text-align: right; width: 140px;">Cash in Hand</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${activeCashMembers.map((m, i) => `
+          <tr>
+            <td style="text-align: center;">${i + 1}</td>
+            <td style="font-weight: 600;">${escapeHtml(m.name || '—')}</td>
+            <td style="color: #475569;">${escapeHtml(m.role || 'Member')}</td>
+            <td style="color: #64748b;">${escapeHtml(m.phone || '—')}</td>
+            <td style="text-align: right; font-weight: 700; color: ${brand.orangeDark};">
+              ${formatCurrency(m.currentBalance)}
+            </td>
+          </tr>
+        `).join('')}
+      </tbody>
+      <tfoot>
+        <tr class="total-row">
+          <td colspan="4" style="text-align: right; font-weight: 800;">Total Cash in Hand Across All Members:</td>
+          <td style="text-align: right; font-weight: 800; color: ${brand.orangeDark}; font-size: 11px;">
+            ${formatCurrency(stats?.totalCashInHand || 0)}
+          </td>
+        </tr>
+      </tfoot>
+    </table>
+  ` : ''}
+
+  <div class="section-title" style="margin-top: 16px;">
+    ${member ? `Transaction History (${txList.length} Records)` : `Transaction Ledger (${txList.length} Records)`}
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="text-align: center; width: 30px;">#</th>
+        <th>Date</th>
+        <th>Member</th>
+        <th style="text-align: center;">Type</th>
+        <th style="text-align: right;">Amount</th>
+        <th style="text-align: right;">Balance After</th>
+        <th>Reason</th>
+        <th>Notes</th>
+        <th>Recorded By</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${rowsHtml}
+    </tbody>
+    <tfoot>
+      <tr class="total-row">
+        <td colspan="4" style="text-align: right;">Total (${txList.length} Transactions):</td>
+        <td style="text-align: right; color: ${totalAdded >= totalSubtracted ? '#15803d' : '#b91c1c'};">
+          ${formatCurrency(totalAdded - totalSubtracted)} (Net)
+        </td>
+        <td colspan="4"></td>
+      </tr>
+    </tfoot>
+  </table>
+
+  ${getPrintFooterHTML(config)}
+</body>
+</html>`;
+
+    printHTML(html);
+  };
+
   // Computed preview for adjustment
   const previewBalance = useMemo(() => {
     if (!selectedMember) return 0;
@@ -587,7 +999,18 @@ const CashInHand = () => {
   // Drawer Member transactions
   const drawerTransactions = useMemo(() => {
     if (!drawerMember) return [];
-    return transactions.filter((t) => t.memberId === drawerMember.id);
+    return transactions
+      .filter((t) => t.memberId === drawerMember.id)
+      .sort((a, b) => {
+        const dateA = a?.date ? a.date.slice(0, 10) : (a?.transactionDate ? a.transactionDate.slice(0, 10) : '');
+        const dateB = b?.date ? b.date.slice(0, 10) : (b?.transactionDate ? b.transactionDate.slice(0, 10) : '');
+        if (dateA !== dateB) {
+          return dateB.localeCompare(dateA);
+        }
+        const timeA = new Date(a?.createdAt || 0).getTime();
+        const timeB = new Date(b?.createdAt || 0).getTime();
+        return timeB - timeA;
+      });
   }, [drawerMember, transactions]);
 
   const getTxChip = (type) => {
@@ -694,17 +1117,16 @@ const CashInHand = () => {
       {/* Toolbar Card - responsive layout */}
       <Card sx={{ mb: { xs: 1.5, md: 3 }, flexShrink: 0 }}>
         <CardContent sx={{ p: { xs: 1, sm: 1.5 }, '&:last-child': { pb: { xs: 1, sm: 1.5 } } }}>
-          <Stack spacing={1}>
-            {/* 1st Row: Tabs, Search & Type/Filter, and Action Buttons */}
+          <Stack spacing={1.25}>
+            {/* 1st Row: Tabs on the left, Action buttons (Refresh, Transfer, Add) on the right */}
             <Box
               sx={{
                 display: 'flex',
                 alignItems: 'center',
-                flexWrap: 'wrap',
+                justifyContent: 'space-between',
                 gap: 1,
               }}
             >
-              {/* Tabs */}
               <Tabs
                 value={activeTab}
                 onChange={(_, v) => {
@@ -712,9 +1134,7 @@ const CashInHand = () => {
                   setSearchTerm('');
                 }}
                 sx={{
-                  order: 1,
                   minHeight: 38,
-                  flexShrink: 0,
                   '& .MuiTab-root': {
                     minHeight: 38,
                     py: 0.5,
@@ -729,104 +1149,28 @@ const CashInHand = () => {
                 <Tab label={`Ledger (${transactions.length})`} />
               </Tabs>
 
-              {/* Search & Filter / Type controls */}
-              {activeTab === 0 ? (
-                <>
-                  <TextField
-                    size="small"
-                    placeholder="Search members..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    slotProps={{
-                      input: {
-                        startAdornment: (
-                          <InputAdornment position="start">
-                            <SearchIcon sx={{ color: 'text.secondary', fontSize: 18 }} />
-                          </InputAdornment>
-                        ),
-                      },
-                    }}
-                    sx={{
-                      order: { xs: 3, md: 2 },
-                      flex: { xs: '1 1 calc(60% - 8px)', sm: '1 1 160px', md: '1 1 200px' },
-                      minWidth: { xs: 130, sm: 160 },
-                      maxWidth: { md: 280 },
-                    }}
-                  />
-
-                  <FormControl
-                    size="small"
-                    sx={{
-                      order: { xs: 4, md: 3 },
-                      width: { xs: 'calc(40% - 8px)', sm: 130 },
-                      minWidth: { xs: 100, sm: 120 },
-                      flexShrink: 0,
-                    }}
-                  >
-                    <InputLabel>Filter</InputLabel>
-                    <Select value={balanceFilter} label="Filter" onChange={(e) => setBalanceFilter(e.target.value)}>
-                      <MenuItem value="All">All</MenuItem>
-                      <MenuItem value="HasCash">Holding Cash</MenuItem>
-                      <MenuItem value="Zero">Zero Balance</MenuItem>
-                    </Select>
-                  </FormControl>
-                </>
-              ) : (
-                <>
-                  <TextField
-                    size="small"
-                    placeholder="Search transactions..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    slotProps={{
-                      input: {
-                        startAdornment: (
-                          <InputAdornment position="start">
-                            <SearchIcon sx={{ color: 'text.secondary', fontSize: 18 }} />
-                          </InputAdornment>
-                        ),
-                      },
-                    }}
-                    sx={{
-                      order: { xs: 3, md: 2 },
-                      flex: { xs: '1 1 calc(60% - 8px)', sm: '1 1 160px', md: '1 1 200px' },
-                      minWidth: { xs: 130, sm: 160 },
-                      maxWidth: { md: 280 },
-                    }}
-                  />
-
-                  <FormControl
-                    size="small"
-                    sx={{
-                      order: { xs: 4, md: 3 },
-                      width: { xs: 'calc(40% - 8px)', sm: 130 },
-                      minWidth: { xs: 100, sm: 120 },
-                      flexShrink: 0,
-                    }}
-                  >
-                    <InputLabel>Type</InputLabel>
-                    <Select value={txTypeFilter} label="Type" onChange={(e) => setTxTypeFilter(e.target.value)}>
-                      <MenuItem value="All">All Types</MenuItem>
-                      <MenuItem value="ADD">Added (+)</MenuItem>
-                      <MenuItem value="SUBTRACT">Subtracted (-)</MenuItem>
-                      <MenuItem value="TRANSFER_IN">Transfer In</MenuItem>
-                      <MenuItem value="TRANSFER_OUT">Transfer Out</MenuItem>
-                    </Select>
-                  </FormControl>
-                </>
-              )}
-
-              {/* Action buttons */}
+              {/* Action buttons always on the same line as Tabs */}
               <Stack
                 direction="row"
                 spacing={1}
                 alignItems="center"
-                sx={{
-                  order: { xs: 2, md: 4 },
-                  ml: { xs: 'auto', md: 'auto' },
-                  flexShrink: 0,
-                }}
+                sx={{ flexShrink: 0 }}
               >
+                {activeTab === 1 && (
+                  <Tooltip title="Print Ledger (All Records)">
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      onClick={() => handlePrintLedger()}
+                      disabled={filteredTransactions.length === 0}
+                      sx={{ minWidth: { xs: 36, sm: 'auto' }, px: { xs: 1, sm: 1.5 }, whiteSpace: 'nowrap' }}
+                    >
+                      <PrintIcon sx={{ mr: { xs: 0, sm: 0.5 }, fontSize: 18 }} />
+                      <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Print</Box>
+                    </Button>
+                  </Tooltip>
+                )}
+
                 <Tooltip title="Refresh">
                   <IconButton
                     size="small"
@@ -871,65 +1215,153 @@ const CashInHand = () => {
               </Stack>
             </Box>
 
-            {/* 2nd Row: Date Range Filter for Ledger */}
-            {activeTab === 1 && (
-              <Box
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1,
-                  flexWrap: 'wrap',
-                  pt: 0.5,
-                  borderTop: '1px solid',
-                  borderColor: 'divider',
-                }}
-              >
-                <Typography
-                  variant="caption"
-                  sx={{
-                    color: 'text.secondary',
-                    fontWeight: 600,
-                    display: { xs: 'none', sm: 'inline-flex' },
-                    alignItems: 'center',
-                    mr: 0.5,
-                  }}
-                >
-                  Date Range:
-                </Typography>
-                <DatePicker
-                  label="From Date"
-                  value={startDate}
-                  onChange={(val) => setStartDate(val)}
-                  format={getDatePickerFormat(config?.dateFormat)}
-                  sx={{ width: { xs: 'calc(50% - 4px)', sm: 150 } }}
-                  slotProps={{ actionBar: { actions: ['clear', 'accept'] }, textField: { size: 'small', fullWidth: true } }}
-                />
-
-                <DatePicker
-                  label="To Date"
-                  value={endDate}
-                  onChange={(val) => setEndDate(val)}
-                  format={getDatePickerFormat(config?.dateFormat)}
-                  sx={{ width: { xs: 'calc(50% - 4px)', sm: 150 } }}
-                  slotProps={{ actionBar: { actions: ['clear', 'accept'] }, textField: { size: 'small', fullWidth: true } }}
-                />
-
-                {(startDate || endDate) && (
-                  <Button
+            {/* 2nd Row: Search and Filters */}
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: 1,
+              }}
+            >
+              {activeTab === 0 ? (
+                <>
+                  <TextField
                     size="small"
-                    variant="text"
-                    color="inherit"
-                    onClick={() => {
-                      setStartDate(null);
-                      setEndDate(null);
+                    placeholder="Search members..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    slotProps={{
+                      input: {
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <SearchIcon sx={{ color: 'text.secondary', fontSize: 18 }} />
+                          </InputAdornment>
+                        ),
+                      },
                     }}
-                    sx={{ fontSize: '0.75rem', textTransform: 'none', py: 0.5 }}
+                    sx={{
+                      flex: 1,
+                      minWidth: { xs: 150, sm: 200 },
+                    }}
+                  />
+
+                  <FormControl
+                    size="small"
+                    sx={{
+                      width: { xs: 120, sm: 140 },
+                      flexShrink: 0,
+                    }}
                   >
-                    Clear Dates
-                  </Button>
-                )}
-              </Box>
-            )}
+                    <InputLabel>Filter</InputLabel>
+                    <Select value={balanceFilter} label="Filter" onChange={(e) => setBalanceFilter(e.target.value)}>
+                      <MenuItem value="All">All</MenuItem>
+                      <MenuItem value="HasCash">Holding Cash</MenuItem>
+                      <MenuItem value="Zero">Zero Balance</MenuItem>
+                    </Select>
+                  </FormControl>
+                </>
+              ) : (
+                <>
+                  {/* The two date controls - grouped to always sit side-by-side in a single row */}
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1,
+                      width: { xs: '100%', sm: 'auto' },
+                      flexShrink: 0,
+                    }}
+                  >
+                    <DatePicker
+                      label="From Date"
+                      value={startDate}
+                      onChange={(val) => setStartDate(val && !isNaN(new Date(val).getTime()) ? val : null)}
+                      format={getDatePickerFormat(config?.dateFormat)}
+                      sx={{
+                        flex: { xs: 1, sm: 'none' },
+                        width: { sm: 155 },
+                        minWidth: 0,
+                      }}
+                      slotProps={{
+                        actionBar: { actions: ['clear', 'accept'] },
+                        textField: {
+                          size: 'small',
+                          sx: { '& .MuiInputBase-input': { pr: 0.5, fontSize: { xs: '0.8rem', sm: '0.85rem' } } },
+                        },
+                      }}
+                    />
+
+                    <DatePicker
+                      label="To Date"
+                      value={endDate}
+                      onChange={(val) => setEndDate(val && !isNaN(new Date(val).getTime()) ? val : null)}
+                      format={getDatePickerFormat(config?.dateFormat)}
+                      sx={{
+                        flex: { xs: 1, sm: 'none' },
+                        width: { sm: 155 },
+                        minWidth: 0,
+                      }}
+                      slotProps={{
+                        actionBar: { actions: ['clear', 'accept'] },
+                        textField: {
+                          size: 'small',
+                          sx: { '& .MuiInputBase-input': { pr: 0.5, fontSize: { xs: '0.8rem', sm: '0.85rem' } } },
+                        },
+                      }}
+                    />
+                  </Box>
+
+                  {/* Search and Type filters - grouped for clean alignment */}
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1,
+                      flex: { xs: '1 1 100%', sm: '1 1 auto' },
+                      width: { xs: '100%', sm: 'auto' },
+                    }}
+                  >
+                    <TextField
+                      size="small"
+                      placeholder="Search transactions..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      slotProps={{
+                        input: {
+                          startAdornment: (
+                            <InputAdornment position="start">
+                              <SearchIcon sx={{ color: 'text.secondary', fontSize: 18 }} />
+                            </InputAdornment>
+                          ),
+                        },
+                      }}
+                      sx={{
+                        flex: 1,
+                        minWidth: { xs: 120, sm: 160 },
+                      }}
+                    />
+
+                    <FormControl
+                      size="small"
+                      sx={{
+                        width: { xs: 120, sm: 130 },
+                        flexShrink: 0,
+                      }}
+                    >
+                      <InputLabel>Type</InputLabel>
+                      <Select value={txTypeFilter} label="Type" onChange={(e) => setTxTypeFilter(e.target.value)}>
+                        <MenuItem value="All">All Types</MenuItem>
+                        <MenuItem value="ADD">Added (+)</MenuItem>
+                        <MenuItem value="SUBTRACT">Subtracted (-)</MenuItem>
+                        <MenuItem value="TRANSFER_IN">Transfer In</MenuItem>
+                        <MenuItem value="TRANSFER_OUT">Transfer Out</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </Box>
+                </>
+              )}
+            </Box>
           </Stack>
         </CardContent>
       </Card>
@@ -1099,10 +1531,34 @@ const CashInHand = () => {
               <Table stickyHeader size="small">
                 <TableHead>
                   <TableRow sx={{ '& th': { whiteSpace: 'nowrap', py: { xs: 0.75, sm: 1 }, fontWeight: 600 } }}>
-                    <TableCell>Date</TableCell>
-                    <TableCell>Member</TableCell>
+                    <TableCell sortDirection={txSortField === 'date' ? txSortOrder : false}>
+                      <TableSortLabel
+                        active={txSortField === 'date'}
+                        direction={txSortField === 'date' ? txSortOrder : 'desc'}
+                        onClick={() => handleRequestSort('date')}
+                      >
+                        Date
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell sortDirection={txSortField === 'member' ? txSortOrder : false}>
+                      <TableSortLabel
+                        active={txSortField === 'member'}
+                        direction={txSortField === 'member' ? txSortOrder : 'asc'}
+                        onClick={() => handleRequestSort('member')}
+                      >
+                        Member
+                      </TableSortLabel>
+                    </TableCell>
                     <TableCell>Type</TableCell>
-                    <TableCell align="right">Amount</TableCell>
+                    <TableCell align="right" sortDirection={txSortField === 'amount' ? txSortOrder : false}>
+                      <TableSortLabel
+                        active={txSortField === 'amount'}
+                        direction={txSortField === 'amount' ? txSortOrder : 'desc'}
+                        onClick={() => handleRequestSort('amount')}
+                      >
+                        Amount
+                      </TableSortLabel>
+                    </TableCell>
                     <TableCell align="right" sx={{ display: { xs: 'none', sm: 'table-cell' } }}>Balance After</TableCell>
                     <TableCell>Reason</TableCell>
                     <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>Notes</TableCell>
@@ -1771,9 +2227,20 @@ const CashInHand = () => {
           <Typography variant="h6" sx={{ fontWeight: 700 }}>
             Member Cash Ledger
           </Typography>
-          <IconButton size="small" onClick={() => setDrawerOpen(false)}>
-            <CloseIcon fontSize="small" />
-          </IconButton>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <Tooltip title="Print Member Ledger">
+              <IconButton
+                size="small"
+                onClick={() => handlePrintLedger(drawerTransactions, drawerMember)}
+                disabled={drawerTransactions.length === 0}
+              >
+                <PrintIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <IconButton size="small" onClick={() => setDrawerOpen(false)}>
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          </Box>
         </Box>
 
         {drawerMember && (

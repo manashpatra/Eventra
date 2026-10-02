@@ -327,6 +327,7 @@ export const transferCashBetweenMembers = async ({
 
 /**
  * Get all cash transactions (optionally filtered by memberId).
+ * Sorted by transaction date descending, with createdAt descending as secondary tie-breaker.
  */
 export const getAllCashTransactions = async (memberId = null) => {
   const all = await firestoreGetAll(TRANSACTIONS_TABLE);
@@ -334,7 +335,19 @@ export const getAllCashTransactions = async (memberId = null) => {
   if (memberId) {
     list = list.filter((t) => t.memberId === memberId);
   }
-  return list.sort((a, b) => new Date(b.createdAt || b.date) - new Date(a.createdAt || a.date));
+  return list.sort((a, b) => {
+    const dateA = a?.date ? a.date.slice(0, 10) : (a?.transactionDate ? a.transactionDate.slice(0, 10) : '');
+    const dateB = b?.date ? b.date.slice(0, 10) : (b?.transactionDate ? b.transactionDate.slice(0, 10) : '');
+    if (dateA !== dateB) {
+      return dateB.localeCompare(dateA);
+    }
+    const timeA = new Date(a?.createdAt || 0).getTime();
+    const timeB = new Date(b?.createdAt || 0).getTime();
+    if (timeB !== timeA) {
+      return timeB - timeA;
+    }
+    return (b?.id || '').localeCompare(a?.id || '');
+  });
 };
 
 /**

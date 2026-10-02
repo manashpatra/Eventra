@@ -306,7 +306,7 @@ const HeroSection = ({ onSelectFlat, onNavigateTab }) => {
           )}
 
           {/* If Flat Selected, show payment status/thank you directly inside Hero Banner */}
-          {selectedFlat && flatData && flatData.resident && (
+          {selectedFlat && (
             <Box sx={{ position: 'relative', zIndex: 1, mb: 1, width: '100%' }}>
               {/* Header inside Hero Banner */}
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2, flexWrap: 'wrap' }}>
@@ -330,15 +330,15 @@ const HeroSection = ({ onSelectFlat, onNavigateTab }) => {
                     Flat {selectedFlat.flatNumber}
                   </Typography>
                   <Chip
-                    icon={flatData.resident.subscriptionStatus === 'paid' ? <CheckIcon /> : <PendingIcon />}
-                    label={flatData.resident.subscriptionStatus === 'paid' ? 'PAID' : 'PENDING'}
+                    icon={flatData?.resident?.subscriptionStatus === 'paid' ? <CheckIcon /> : <PendingIcon />}
+                    label={flatData?.resident?.subscriptionStatus === 'paid' ? 'PAID' : 'PENDING'}
                     sx={{
                       fontWeight: 700,
                       fontSize: '0.75rem',
                       height: 24,
-                      backgroundColor: flatData.resident.subscriptionStatus === 'paid' ? 'rgba(102,187,106,0.15)' : 'rgba(255,167,38,0.15)',
-                      color: flatData.resident.subscriptionStatus === 'paid' ? status.success.main(isDark) : status.warning.main(isDark),
-                      '& .MuiChip-icon': { color: flatData.resident.subscriptionStatus === 'paid' ? status.success.main(isDark) : status.warning.main(isDark), fontSize: 16 },
+                      backgroundColor: flatData?.resident?.subscriptionStatus === 'paid' ? 'rgba(102,187,106,0.15)' : 'rgba(255,167,38,0.15)',
+                      color: flatData?.resident?.subscriptionStatus === 'paid' ? status.success.main(isDark) : status.warning.main(isDark),
+                      '& .MuiChip-icon': { color: flatData?.resident?.subscriptionStatus === 'paid' ? status.success.main(isDark) : status.warning.main(isDark), fontSize: 16 },
                     }}
                   />
                   <Button
@@ -353,7 +353,7 @@ const HeroSection = ({ onSelectFlat, onNavigateTab }) => {
               </Box>
 
               {/* Status Specific Content */}
-              {flatData.resident.subscriptionStatus === 'paid' ? (
+              {flatData?.resident?.subscriptionStatus === 'paid' ? (
                 /* Paid: Thank you block (COMPACT) */
                 <Fade in timeout={500}>
                   <Box
@@ -377,13 +377,13 @@ const HeroSection = ({ onSelectFlat, onNavigateTab }) => {
                     </Box>
                     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
                       <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                        <strong>Amount:</strong> {formatCurrency(flatData.resident.subscriptionAmount || subscriptionAmount)}
+                        <strong>Amount:</strong> {formatCurrency(flatData?.resident?.subscriptionAmount || subscriptionAmount)}
                       </Typography>
                       <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                        <strong>Date:</strong> {formatShortDate(flatData.resident.transactionDate || flatData.resident.paymentDate, appConfig?.dateFormat)}
+                        <strong>Date:</strong> {formatShortDate(flatData?.resident?.transactionDate || flatData?.resident?.paymentDate, appConfig?.dateFormat)}
                       </Typography>
                       <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                        <strong>Mode:</strong> {flatData.resident.paymentMode || 'N/A'}
+                        <strong>Mode:</strong> {flatData?.resident?.paymentMode || 'N/A'}
                       </Typography>
                     </Box>
                   </Box>
@@ -446,7 +446,7 @@ const HeroSection = ({ onSelectFlat, onNavigateTab }) => {
                 )}
 
                 {/* Paid Donations (Only show if there are any) */}
-                {flatData.donations && flatData.donations.length > 0 && (
+                {flatData?.donations && flatData?.donations.length > 0 && (
                   <Grid size={12}>
                     <Fade in timeout={600}>
                       <Card sx={{ borderRadius: '12px' }}>
@@ -457,7 +457,7 @@ const HeroSection = ({ onSelectFlat, onNavigateTab }) => {
                               Paid Donations
                             </Typography>
                             <Chip
-                              label={flatData.donations.length}
+                              label={flatData?.donations.length}
                               size="small"
                               sx={{ ml: 'auto', backgroundColor: 'rgba(206,147,216,0.12)', color: secondary.main(isDark), fontWeight: 600 }}
                             />
@@ -473,7 +473,7 @@ const HeroSection = ({ onSelectFlat, onNavigateTab }) => {
                                 </TableRow>
                               </TableHead>
                               <TableBody>
-                                {flatData.donations.map((donation) => (
+                                {flatData?.donations.map((donation) => (
                                   <TableRow key={donation.id}>
                                     <TableCell>
                                       <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>
@@ -776,3 +776,5 @@ const HeroSection = ({ onSelectFlat, onNavigateTab }) => {
 };
 
 export default HeroSection;
+
+

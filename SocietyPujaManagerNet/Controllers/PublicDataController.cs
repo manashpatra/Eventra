@@ -1,3 +1,4 @@
+using SocietyPujaManagerNet.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -111,6 +112,18 @@ public class PublicDataController : ControllerBase
         var resident = await _db.Residents.FirstOrDefaultAsync(r => 
             variantsList.Contains(r.FlatNumber));
 
+        if (resident == null)
+        {
+            resident = new Resident
+            {
+                Id = "",
+                FlatNumber = decoded,
+                Name = "",
+                SubscriptionStatus = "pending",
+                SubscriptionAmount = 0
+            };
+        }
+
         var resId = resident?.Id;
 
         var donations = await _db.Donations
@@ -141,3 +154,5 @@ public class PublicDataController : ControllerBase
         });
     }
 }
+
+

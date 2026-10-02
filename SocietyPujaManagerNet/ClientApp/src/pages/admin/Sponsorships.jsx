@@ -18,7 +18,7 @@ import { createSponsorship, getAllSponsorships, deleteSponsorship, getSponsorshi
 import { getMasterConfig } from '../../services/masterConfigService';
 import { getLocalISODate, formatDate, getDatePickerFormat } from '../../utils/dateUtils';
 import { generateImageFromHTML, generatePDFFromHTML, printHTML } from '../../utils/print/core';
-import { getReceiptHTML } from '../../utils/print/templates/receiptTemplate';
+import { getSponsorshipReceiptHTML } from '../../utils/print/templates/sponsorshipReceiptTemplate';
 import { getProFormaInvoiceHTML } from '../../utils/print/templates/invoiceTemplate';
 import { getSponsorshipsReportHTML } from '../../utils/print/templates/sponsorshipReportTemplate';
 import { matchesFlatOrName, normalizeFlat } from '../../utils/flatHelper';
@@ -347,6 +347,26 @@ const Sponsorships = () => {
   const formatCurrency = (a) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(a);
 
 
+  const handlePrintInvoice = async (s) => {
+    try {
+      const invoiceHtmlStr = await getProFormaInvoiceHTML(s, config || {}, false);
+      printHTML(invoiceHtmlStr);
+    } catch (error) {
+      console.error('Error printing invoice:', error);
+      alert('Failed to print invoice. ' + error.message);
+    }
+  };
+
+  const handlePrintReceipt = (s) => {
+    try {
+      const receiptHtmlStr = getSponsorshipReceiptHTML(s, config || {}, false);
+      printHTML(receiptHtmlStr);
+    } catch (error) {
+      console.error('Error printing receipt:', error);
+      alert('Failed to print receipt. ' + error.message);
+    }
+  };
+
   const handleDownloadInvoice = async (s, format = 'image') => {
     try {
       const invoiceHtmlStr = await getProFormaInvoiceHTML(s, config || {}, true);
@@ -371,21 +391,19 @@ const Sponsorships = () => {
 
   const handleDownloadReceipt = async (s, format = 'image') => {
     try {
-      const receiptHtmlStr = getReceiptHTML(s, config || {}, true, 'Sponsorship Receipt');
+      const receiptHtmlStr = getSponsorshipReceiptHTML(s, config || {}, true);
       if (format === 'pdf') {
         const pdf = await generatePDFFromHTML(receiptHtmlStr);
         pdf.save(`Sponsorship_Receipt_${s.sponsorName.replace(/\s+/g, '_')}.pdf`);
       } else {
         const canvas = await generateImageFromHTML(receiptHtmlStr);
-        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.9));
-        const url = window.URL.createObjectURL(blob);
+        const dataUrl = canvas.toDataURL('image/jpeg', 1.0);
         const a = document.createElement('a');
-        a.href = url;
+        a.href = dataUrl;
         a.download = `Sponsorship_Receipt_${s.sponsorName.replace(/\s+/g, '_')}.jpg`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
       }
     } catch (error) {
       console.error('Error downloading receipt:', error);
@@ -395,7 +413,7 @@ const Sponsorships = () => {
 
   const handleShareWhatsApp = async (s) => {
     try {
-      const receiptHtmlStr = getReceiptHTML(s, config || {}, true, 'Sponsorship Receipt');
+      const receiptHtmlStr = getSponsorshipReceiptHTML(s, config || {}, true);
       const canvas = await generateImageFromHTML(receiptHtmlStr);
 
       const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.9));
@@ -1124,7 +1142,7 @@ Jai Maa Durga! 🌺🙏
           setDownloadMenuTarget({ s: actionSponsorship, type: 'invoice' });
         }}>
           <ListItemIcon><ReceiptIcon fontSize="small" sx={{ color: sponsorshipPalette.internal }} /></ListItemIcon>
-          <ListItemText>Download Invoice</ListItemText>
+          <ListItemText>Invoice (Print / Download)</ListItemText>
         </MenuItem>
 
         {actionSponsorship?.status !== 'Pending' && [
@@ -1135,7 +1153,7 @@ Jai Maa Durga! 🌺🙏
             setDownloadMenuTarget({ s: actionSponsorship, type: 'receipt' });
           }}>
             <ListItemIcon><DownloadIcon fontSize="small" sx={{ color: statusBadge.info.text }} /></ListItemIcon>
-            <ListItemText>Download Receipt</ListItemText>
+            <ListItemText>Receipt (Print / Download)</ListItemText>
           </MenuItem>,
           !isAuditor ? (
             <MenuItem key="whatsapp" onClick={() => { handleActionMenuClose(); handleShareWhatsApp(actionSponsorship); }}>
@@ -1167,13 +1185,13 @@ Jai Maa Durga! 🌺🙏
         <MenuItem onClick={() => {
           if (downloadMenuTarget) {
             const { s, type } = downloadMenuTarget;
-            if (type === 'invoice') handleDownloadInvoice(s, 'image');
-            else handleDownloadReceipt(s, 'image');
+            if (type === 'invoice') handlePrintInvoice(s);
+            else handlePrintReceipt(s);
           }
           handleDownloadMenuClose();
         }}>
-          <ListItemIcon><ImageIcon fontSize="small" /></ListItemIcon>
-          <ListItemText>Download as Image</ListItemText>
+          <ListItemIcon><PrintIcon fontSize="small" sx={{ color: brand.orange }} /></ListItemIcon>
+          <ListItemText primary="Print / Save as PDF" secondary="Native A4 vector text" />
         </MenuItem>
         <MenuItem onClick={() => {
           if (downloadMenuTarget) {
@@ -1183,8 +1201,19 @@ Jai Maa Durga! 🌺🙏
           }
           handleDownloadMenuClose();
         }}>
-          <ListItemIcon><PictureAsPdfIcon fontSize="small" /></ListItemIcon>
-          <ListItemText>Download as PDF</ListItemText>
+          <ListItemIcon><PictureAsPdfIcon fontSize="small" sx={{ color: statusBadge.error.text }} /></ListItemIcon>
+          <ListItemText primary="Download PDF" secondary="Standard A4 file" />
+        </MenuItem>
+        <MenuItem onClick={() => {
+          if (downloadMenuTarget) {
+            const { s, type } = downloadMenuTarget;
+            if (type === 'invoice') handleDownloadInvoice(s, 'image');
+            else handleDownloadReceipt(s, 'image');
+          }
+          handleDownloadMenuClose();
+        }}>
+          <ListItemIcon><ImageIcon fontSize="small" sx={{ color: statusBadge.info.text }} /></ListItemIcon>
+          <ListItemText primary="Download Image" secondary="High-res JPEG" />
         </MenuItem>
       </Menu>
     </Box>
