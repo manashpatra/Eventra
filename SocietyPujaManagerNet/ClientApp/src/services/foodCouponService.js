@@ -88,8 +88,12 @@ export const getFoodCouponStats = async (existingCoupons = null) => {
   all.forEach(c => {
     const amt = Number(c.TotalAmount || c.totalAmount || 0);
     totalAmount += amt;
-    const mode = (c.PaymentMode || c.paymentMode || '').toLowerCase();
-    if (mode === 'cash') cashAmount += amt;
+    const mode = (c.PaymentMode || c.paymentMode || '');
+    if (mode.toLowerCase() === 'cash') {
+      cashAmount += amt;
+    } else if (mode === 'Cash + UPI') {
+      cashAmount += Number(c.MixedCashAmount || c.mixedCashAmount || 0);
+    }
   });
   return {
     totalCount: all.length,

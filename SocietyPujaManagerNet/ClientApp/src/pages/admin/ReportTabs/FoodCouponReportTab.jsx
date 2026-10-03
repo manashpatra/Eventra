@@ -1,9 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { Card, CardContent, Typography, Box, Button, TableContainer, Table, TableHead, TableRow, TableCell, TableBody, Chip, FormControl, InputLabel, Select, MenuItem } from '@mui/material';
 import { Print as PrintIcon, Download as DownloadIcon } from '@mui/icons-material';
+import { formatDate } from '../../../utils/dateUtils';
 import { brand, mealType, border } from '../../../theme/colorTokens';
 
-const FoodCouponReportTab = ({ dayCouponSummary, fmt, printReport, exportCSV }) => {
+const FoodCouponReportTab = ({ dayCouponSummary, config, fmt, printReport, exportCSV }) => {
   const [filterFoodType, setFilterFoodType] = useState('all');
 
   const displayRows = useMemo(() => {
@@ -39,6 +40,7 @@ const FoodCouponReportTab = ({ dayCouponSummary, fmt, printReport, exportCSV }) 
     const exportData = [
       ...displayRows.map(r => ({
         day: r.day || '',
+        date: r.date ? formatDate(r.date, config?.dateFormat) : '',
         meal: r.meal || '',
         veg: r.veg || 0,
         khichuri: r.khichuri || 0,
@@ -52,6 +54,7 @@ const FoodCouponReportTab = ({ dayCouponSummary, fmt, printReport, exportCSV }) 
       })),
       {
         day: 'TOTAL',
+        date: '',
         meal: 'Total',
         veg: totals.veg,
         khichuri: totals.khichuri,
@@ -69,7 +72,7 @@ const FoodCouponReportTab = ({ dayCouponSummary, fmt, printReport, exportCSV }) 
       exportCSV(
         exportData,
         `food_coupon_summary_${filterFoodType.toLowerCase()}.csv`,
-        ['day', 'meal', 'veg', 'khichuri', 'lucchi', 'chicken', 'mutton', 'nonVegGeneric', 'dineOut', 'parcel', 'amount']
+        ['day', 'date', 'meal', 'veg', 'khichuri', 'lucchi', 'chicken', 'mutton', 'nonVegGeneric', 'dineOut', 'parcel', 'amount']
       );
     }
   };
@@ -120,21 +123,36 @@ const FoodCouponReportTab = ({ dayCouponSummary, fmt, printReport, exportCSV }) 
                 <TableCell>Revenue</TableCell>
               </TableRow></TableHead>
               <TableBody>
-                {displayRows.map((row, i) => (
-                  <TableRow key={i}>
-                    <TableCell><Chip label={row.day} size="small" /></TableCell>
-                    <TableCell>{row.meal}</TableCell>
-                    <TableCell><Typography sx={{ color: (theme) => mealType.Veg.color(theme.palette.mode === 'dark'), fontWeight: filterFoodType === 'Veg' ? 800 : 600 }}>{row.veg}</Typography></TableCell>
-                    <TableCell><Typography sx={{ color: (theme) => mealType.Khichuri.color(theme.palette.mode === 'dark'), fontWeight: filterFoodType === 'Khichuri' ? 800 : 600 }}>{row.khichuri}</Typography></TableCell>
-                    <TableCell><Typography sx={{ color: (theme) => mealType.Lucchi.color(theme.palette.mode === 'dark'), fontWeight: filterFoodType === 'Lucchi' ? 800 : 600 }}>{row.lucchi}</Typography></TableCell>
-                    <TableCell><Typography sx={{ color: (theme) => mealType.Chicken.color(theme.palette.mode === 'dark'), fontWeight: filterFoodType === 'Chicken' ? 800 : 600 }}>{row.chicken}</Typography></TableCell>
-                    <TableCell><Typography sx={{ color: (theme) => mealType.Mutton.color(theme.palette.mode === 'dark'), fontWeight: filterFoodType === 'Mutton' ? 800 : 600 }}>{row.mutton}</Typography></TableCell>
-                    <TableCell><Typography sx={{ color: (theme) => mealType['Non-Veg'].color(theme.palette.mode === 'dark'), fontWeight: filterFoodType === 'Non-Veg' ? 800 : 600 }}>{row.nonVegOther || 0}</Typography></TableCell>
-                    <TableCell>{row.dineOut}</TableCell>
-                    <TableCell>{row.parcel}</TableCell>
-                    <TableCell><Typography sx={{ fontWeight: 600, color: brand.gold }}>{fmt(row.amount)}</Typography></TableCell>
-                  </TableRow>
-                ))}
+                {displayRows.map((row, i) => {
+                  const isNewDay = i > 0 && displayRows[i - 1]?.day !== row.day;
+                  return (
+                    <TableRow
+                      key={`${row.day}-${row.meal}-${i}`}
+                      sx={isNewDay ? { borderTop: (theme) => `2px solid ${border.divider(theme.palette.mode === 'dark')}` } : {}}
+                    >
+                      <TableCell>
+                        <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
+                          <Chip label={row.day} size="small" sx={{ fontWeight: 600 }} />
+                          {row.date && (
+                            <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, fontSize: '0.75rem', whiteSpace: 'nowrap' }}>
+                              ({formatDate(row.date, config?.dateFormat)})
+                            </Typography>
+                          )}
+                        </Box>
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>{row.meal}</TableCell>
+                      <TableCell><Typography sx={{ color: (theme) => mealType.Veg.color(theme.palette.mode === 'dark'), fontWeight: filterFoodType === 'Veg' ? 800 : 600 }}>{row.veg}</Typography></TableCell>
+                      <TableCell><Typography sx={{ color: (theme) => mealType.Khichuri.color(theme.palette.mode === 'dark'), fontWeight: filterFoodType === 'Khichuri' ? 800 : 600 }}>{row.khichuri}</Typography></TableCell>
+                      <TableCell><Typography sx={{ color: (theme) => mealType.Lucchi.color(theme.palette.mode === 'dark'), fontWeight: filterFoodType === 'Lucchi' ? 800 : 600 }}>{row.lucchi}</Typography></TableCell>
+                      <TableCell><Typography sx={{ color: (theme) => mealType.Chicken.color(theme.palette.mode === 'dark'), fontWeight: filterFoodType === 'Chicken' ? 800 : 600 }}>{row.chicken}</Typography></TableCell>
+                      <TableCell><Typography sx={{ color: (theme) => mealType.Mutton.color(theme.palette.mode === 'dark'), fontWeight: filterFoodType === 'Mutton' ? 800 : 600 }}>{row.mutton}</Typography></TableCell>
+                      <TableCell><Typography sx={{ color: (theme) => mealType['Non-Veg'].color(theme.palette.mode === 'dark'), fontWeight: filterFoodType === 'Non-Veg' ? 800 : 600 }}>{row.nonVegOther || 0}</Typography></TableCell>
+                      <TableCell>{row.dineOut}</TableCell>
+                      <TableCell>{row.parcel}</TableCell>
+                      <TableCell><Typography sx={{ fontWeight: 600, color: brand.gold }}>{fmt(row.amount)}</Typography></TableCell>
+                    </TableRow>
+                  );
+                })}
                 {displayRows.length === 0 && (
                   <TableRow><TableCell colSpan={11} align="center" sx={{ py: 4 }}>
                     <Typography sx={{ color: 'text.secondary' }}>No food coupons found for selected food type filter.</Typography>

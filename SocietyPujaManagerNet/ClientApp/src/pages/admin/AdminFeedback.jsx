@@ -68,8 +68,8 @@ const AdminFeedback = () => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
   const { user } = useAuth();
-  const canDeleteFeedback = user?.role !== 'Standard' && user?.role !== 'Auditor';
-  const canReply = user?.role !== 'Standard' && user?.role !== 'Auditor';
+  const canDeleteFeedback = user?.role !== 'Standard' && user?.role !== 'Auditor' && user?.role !== 'FoodCoupon';
+  const canReply = user?.role !== 'Standard' && user?.role !== 'Auditor' && user?.role !== 'FoodCoupon';
   const [feedbacks, setFeedbacks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filterCategory, setFilterCategory] = useState('All');

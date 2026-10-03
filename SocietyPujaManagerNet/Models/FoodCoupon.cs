@@ -20,6 +20,8 @@ public class FoodCoupon
     public decimal TotalAmount { get; set; }
     public decimal FocValue { get; set; }
     public string PaymentMode { get; set; } = "Cash";
+    public decimal MixedCashAmount { get; set; }
+    public decimal MixedUpiAmount { get; set; }
     public string Remarks { get; set; } = "";
     public string IssuedBy { get; set; } = "";
     public string CouponNumbers { get; set; } = "";

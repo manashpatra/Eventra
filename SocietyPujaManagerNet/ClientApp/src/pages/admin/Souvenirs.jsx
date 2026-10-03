@@ -25,7 +25,7 @@ import { statusBadge, thirdParty, status } from '../../theme/colorTokens';
 const Souvenirs = () => {
   const { user } = useAuth();
   const { startProcessing, stopProcessing } = useProcessing();
-  const isAuditor = user?.role === 'Auditor';
+  const isAuditor = user?.role === 'Auditor' || user?.role === 'FoodCoupon';
   const isSuperAdmin = user?.role === 'Super Admin';
   const [souvenirs, setSouvenirs] = useState([]);
   const [residents, setResidents] = useState([]);

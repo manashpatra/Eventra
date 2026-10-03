@@ -1,7 +1,7 @@
 {
   "name": "dpc-manager-2026-27",
   "private": true,
-  "version": "2026.0.112",
+  "version": "2026.0.116",
   "type": "module",
   "scripts": {
     "install-if-needed": "node -e \"if(!require('fs').existsSync('node_modules')) process.exit(1)\" || npm install",

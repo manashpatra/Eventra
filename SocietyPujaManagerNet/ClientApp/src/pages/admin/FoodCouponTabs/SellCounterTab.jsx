@@ -39,7 +39,16 @@ import { useProcessing } from '../../../contexts/ProcessingContext';
 import { useAuth } from '../../../contexts/AuthContext';
 import { brand, printTheme, statusBadge, getMealTypeColor, gradient as themeGradient, leadsPalette } from '../../../theme/colorTokens';
 
-const SellCounterTab = ({ residents, config, coupons, historyLoaded, loadCounterData, loadHistoryData }) => {
+const SellCounterTab = ({
+  residents,
+  config,
+  coupons,
+  historyLoaded,
+  loadCounterData,
+  loadHistoryData,
+  draftToLoad,
+  onDraftLoaded,
+}) => {
   const { enqueueSnackbar } = useSnackbar();
   const { startProcessing, stopProcessing } = useProcessing();
   const { user } = useAuth();
@@ -53,6 +62,7 @@ const SellCounterTab = ({ residents, config, coupons, historyLoaded, loadCounter
   const [totalPlates, setTotalPlates] = useState(0);
   const [parcelCount, setParcelCount] = useState(0);
   const [paymentMode, setPaymentMode] = useState('UPI');
+  const [mixedCashAmount, setMixedCashAmount] = useState(0);
   const [remarks, setRemarks] = useState('');
   const [couponNumbers, setCouponNumbers] = useState('');
   const [cart, setCart] = useState([]);
@@ -215,6 +225,73 @@ const SellCounterTab = ({ residents, config, coupons, historyLoaded, loadCounter
     }
   }, [availableFoodTypes]);
 
+  // Handle externally passed draft to load (from Draft Carts tab)
+  useEffect(() => {
+    if (draftToLoad) {
+      const res = (residents || []).find(r => r.id === draftToLoad.residentId || r.flatNumber === draftToLoad.flatNumber);
+      const targetResident = res || {
+        id: draftToLoad.residentId,
+        flatNumber: draftToLoad.flatNumber,
+        name: draftToLoad.residentName || `Flat ${draftToLoad.flatNumber}`,
+        subscriptionStatus: 'paid'
+      };
+
+      setSelectedResident(targetResident);
+      setDraftCarts(prev => [draftToLoad, ...prev.filter(d => d.id !== draftToLoad.id)]);
+
+      const validItems = (draftToLoad.items || []).filter(item => isFoodDayValid(item.dayDate)).map(item => {
+        let normalPriceVar = Number(item.normalPrice) || 0;
+        let addlPrice = Number(item.additionalPrice) || 0;
+        let packCharge = Number(item.parcelPackingCharge) || 0;
+
+        const dayConfig = config?.foodDays?.find(d => d.dayName === item.day);
+        if (dayConfig && dayConfig.mealPrices && dayConfig.mealPrices[item.mealType]) {
+          const mealConfig = dayConfig.mealPrices[item.mealType][item.foodType] || dayConfig.mealPrices[item.mealType]['Non-Veg'];
+          if (mealConfig) {
+            normalPriceVar = Number(mealConfig.normal) || 0;
+            addlPrice = Number(mealConfig.additional) || 0;
+            packCharge = Number(mealConfig.parcelPacking) || 0;
+          }
+        }
+
+        return {
+          ...item,
+          id: Date.now().toString() + Math.random(),
+          residentId: targetResident.id,
+          residentName: targetResident.name,
+          flatNumber: targetResident.flatNumber,
+          normalPrice: normalPriceVar,
+          additionalPrice: addlPrice,
+          parcelPackingCharge: packCharge,
+          totalAmount: calculateCouponTotal(
+            item.normalDineOutCount || 0,
+            item.normalParcelCount || 0,
+            item.additionalDineOutCount || 0,
+            item.additionalParcelCount || 0,
+            normalPriceVar, addlPrice, packCharge
+          )
+        };
+      });
+
+      setCart(validItems);
+      const safeMode = ['Cash', 'UPI', 'Cash + UPI', 'Net Banking'].includes(draftToLoad.paymentMode)
+        ? (draftToLoad.paymentMode === 'Cheque' ? 'Cash' : draftToLoad.paymentMode)
+        : 'Cash';
+      setPaymentMode(safeMode);
+      setLoadedDraftId(draftToLoad.id);
+      setEditingCartItemId(null);
+
+      if (validItems.length < (draftToLoad.items || []).length) {
+        enqueueSnackbar('Some expired items from past days were excluded.', { variant: 'warning' });
+      }
+      enqueueSnackbar(`Draft cart for Flat ${draftToLoad.flatNumber} loaded into Sell Counter!`, { variant: 'success' });
+
+      if (onDraftLoaded) {
+        onDraftLoaded();
+      }
+    }
+  }, [draftToLoad, residents, config]);
+
   // Auto-load pending draft cart when resident is selected
   useEffect(() => {
     if (selectedResident && draftCarts && draftCarts.length > 0) {
@@ -254,7 +331,7 @@ const SellCounterTab = ({ residents, config, coupons, historyLoaded, loadCounter
           };
         });
         setCart(validItems);
-        setPaymentMode(activeDraft.paymentMode || 'Cash');
+        setPaymentMode(activeDraft.paymentMode === 'Cheque' ? 'Cash' : (activeDraft.paymentMode || 'Cash'));
         setLoadedDraftId(activeDraft.id);
       }
     }
@@ -422,6 +499,8 @@ const SellCounterTab = ({ residents, config, coupons, historyLoaded, loadCounter
     setFoodType('Veg');
     setCouponNumbers('');
     setPaymentMode('Cash');
+    setMixedCashAmount(0);
+    setHasShownUPIQR(false);
     setRemarks('');
     setCart([]);
     setLoadedDraftId(null);
@@ -460,6 +539,8 @@ const SellCounterTab = ({ residents, config, coupons, historyLoaded, loadCounter
     const residentName = sortedItems[0]?.residentName || '';
     const flatNumber = sortedItems[0]?.flatNumber || '';
     const payMode = sortedItems[0]?.paymentMode || 'Cash';
+    const mixedCash = sortedItems.reduce((s, c) => s + (Number(c.mixedCashAmount) || 0), 0);
+    const mixedUpi = sortedItems.reduce((s, c) => s + (Number(c.mixedUpiAmount) || 0), 0);
     const totalPaid = sortedItems.reduce((s, c) => s + (c.totalAmount || 0), 0);
 
     const headerHtml = getPrintHeaderHTML(config || {});
@@ -501,7 +582,7 @@ const SellCounterTab = ({ residents, config, coupons, historyLoaded, loadCounter
           <div class="info-box">
             <strong>Flat Number:</strong> ${flatNumber}<br/>
             <strong>Resident Name:</strong> ${residentName}<br/>
-            <strong>Payment Mode:</strong> ${payMode}<br/>
+            <strong>Payment Mode:</strong> ${payMode}${payMode === 'Cash + UPI' ? ` (Cash: ${formatCurrency(mixedCash)}, UPI: ${formatCurrency(mixedUpi)})` : ''}<br/>
             <strong>Date & Time:</strong> ${formatDateTime(new Date(), config?.dateFormat)}
           </div>
 
@@ -523,17 +604,50 @@ const SellCounterTab = ({ residents, config, coupons, historyLoaded, loadCounter
     printHTML(fullHTML);
   };
 
+  // Compute the UPI portion for mixed mode
+  const cartGrandTotal = cart.reduce((sum, i) => sum + i.totalAmount, 0);
+  const mixedUpiAmount = paymentMode === 'Cash + UPI' ? Math.max(0, cartGrandTotal - mixedCashAmount) : 0;
+
   const handleSellCart = async (andPrint = false) => {
     if (cart.length === 0) return;
+
+    // Validate mixed mode
+    if (paymentMode === 'Cash + UPI') {
+      const total = cart.reduce((sum, i) => sum + i.totalAmount, 0);
+      if (mixedCashAmount <= 0 || mixedCashAmount >= total) {
+        enqueueSnackbar('For Cash + UPI mode, cash amount must be between ₹1 and less than the total.', { variant: 'warning' });
+        return;
+      }
+    }
 
     startProcessing('Issuing coupons...');
     try {
       const createdCoupons = [];
-      for (const item of cart) {
+      const total = cart.reduce((sum, i) => sum + i.totalAmount, 0);
+      const isMixed = paymentMode === 'Cash + UPI';
+      let remainingCash = isMixed ? mixedCashAmount : 0;
+
+      for (let idx = 0; idx < cart.length; idx++) {
+        const item = cart[idx];
         const itemPaymentMode = selectedResident?.isFacility ? 'FOC' : paymentMode;
+        let itemCash = 0;
+        if (isMixed) {
+          if (idx === cart.length - 1) {
+            itemCash = remainingCash;
+          } else {
+            itemCash = total > 0 ? Math.min(remainingCash, Math.round((item.totalAmount / total) * mixedCashAmount)) : 0;
+            remainingCash -= itemCash;
+          }
+        }
+        const itemUpi = isMixed ? Math.max(0, item.totalAmount - itemCash) : 0;
+        const mixedData = isMixed ? {
+          mixedCashAmount: itemCash,
+          mixedUpiAmount: itemUpi,
+        } : {};
         const created = await createFoodCoupon({
           ...item,
           paymentMode: itemPaymentMode,
+          ...mixedData,
           remarks,
           issuedBy: user?.displayName || user?.email || user?.role || 'Admin',
         });
@@ -564,6 +678,13 @@ const SellCounterTab = ({ residents, config, coupons, historyLoaded, loadCounter
   // --- Online Food Coupon Handlers ---
   const handleOpenOnlineCouponDialog = async () => {
     if (cart.length === 0) return;
+    if (paymentMode === 'Cash + UPI') {
+      const total = cart.reduce((sum, i) => sum + i.totalAmount, 0);
+      if (mixedCashAmount <= 0 || mixedCashAmount >= total) {
+        enqueueSnackbar('For Cash + UPI mode, cash amount must be between ₹1 and less than the total.', { variant: 'warning' });
+        return;
+      }
+    }
     setOnlineCodeError('');
     setOnlineIssuing(false);
     // Pre-fill access code if flat already has one
@@ -583,9 +704,18 @@ const SellCounterTab = ({ residents, config, coupons, historyLoaded, loadCounter
       setOnlineCodeError('Please enter a valid 6-digit numeric code');
       return;
     }
+    if (paymentMode === 'Cash + UPI') {
+      const total = cart.reduce((sum, i) => sum + i.totalAmount, 0);
+      if (mixedCashAmount <= 0 || mixedCashAmount >= total) {
+        enqueueSnackbar('For Cash + UPI mode, cash amount must be between ₹1 and less than the total.', { variant: 'warning' });
+        return;
+      }
+    }
     setOnlineCodeError('');
     setOnlineIssuing(true);
     try {
+      const total = cart.reduce((sum, i) => sum + i.totalAmount, 0);
+      const isMixed = paymentMode === 'Cash + UPI';
       await issueOnlineFoodCoupon({
         residentId: selectedResident.id,
         flatNumber: selectedResident.flatNumber,
@@ -593,6 +723,7 @@ const SellCounterTab = ({ residents, config, coupons, historyLoaded, loadCounter
         accessCode: code,
         cartItems: cart,
         paymentMode: selectedResident?.isFacility ? 'FOC' : paymentMode,
+        ...(isMixed ? { mixedCashAmount, mixedUpiAmount: Math.max(0, total - mixedCashAmount) } : {}),
         remarks,
         issuedBy: user?.displayName || user?.email || user?.role || 'Admin',
       });
@@ -722,7 +853,7 @@ const SellCounterTab = ({ residents, config, coupons, historyLoaded, loadCounter
                                     };
                                   });
                                   setCart([...cart, ...validItems]);
-                                  setPaymentMode(activeDraft.paymentMode || 'Cash');
+                                  setPaymentMode(activeDraft.paymentMode === 'Cheque' ? 'Cash' : (activeDraft.paymentMode || 'Cash'));
                                   setLoadedDraftId(activeDraft.id);
                                 }}
                               >
@@ -1039,6 +1170,7 @@ const SellCounterTab = ({ residents, config, coupons, historyLoaded, loadCounter
                       onChange={(e) => {
                         setPaymentMode(e.target.value);
                         setHasShownUPIQR(false);
+                        setMixedCashAmount(0);
                         if (e.target.value.toLowerCase() === 'upi' && cart.reduce((sum, i) => sum + i.totalAmount, 0) > 0) {
                           setUpiPopupOpen(true);
                           setHasShownUPIQR(true);
@@ -1046,11 +1178,60 @@ const SellCounterTab = ({ residents, config, coupons, historyLoaded, loadCounter
                       }}
                       label="Cart Payment Mode"
                     >
-                      {(config?.paymentModes || ['UPI', 'Cash', 'Cheque', 'Net Banking']).map((mode) => (
+                      {[...new Set([...(config?.paymentModes || ['UPI', 'Cash', 'Net Banking']), 'Cash + UPI'])].filter(mode => mode !== 'Cheque').map((mode) => (
                         <MenuItem key={mode} value={mode}>{mode}</MenuItem>
                       ))}
                     </Select>
                   </FormControl>
+
+                  {/* Mixed Mode: Cash + UPI Split */}
+                  {paymentMode === 'Cash + UPI' && cart.length > 0 && (
+                    <Paper variant="outlined" sx={{ p: 1.5, mb: 1.5, borderRadius: 2, bgcolor: 'rgba(76,175,80,0.04)', border: '1px solid rgba(76,175,80,0.25)' }}>
+                      <Typography variant="caption" sx={{ fontWeight: 700, color: 'success.main', display: 'block', mb: 1 }}>
+                        💰 Split Payment — Cash + UPI
+                      </Typography>
+                      <Grid container spacing={1.5}>
+                        <Grid size={6}>
+                          <TextField
+                            fullWidth size="small"
+                            label="Cash Amount (₹)"
+                            type="number"
+                            value={mixedCashAmount}
+                            onChange={(e) => {
+                              const val = Math.max(0, Math.min(cartGrandTotal, parseInt(e.target.value) || 0));
+                              setMixedCashAmount(val);
+                              setHasShownUPIQR(false);
+                            }}
+                            slotProps={{ htmlInput: { min: 0, max: cartGrandTotal } }}
+                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: 1 } }}
+                          />
+                          <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5, flexWrap: 'wrap' }}>
+                            {[100, 200, 500].map((amt) => (
+                              <Chip key={`cash-${amt}`} label={`₹${amt}`} size="small" variant="outlined" clickable
+                                onClick={() => {
+                                  setMixedCashAmount(Math.min(cartGrandTotal, amt));
+                                  setHasShownUPIQR(false);
+                                }}
+                                sx={{ height: 20, fontSize: '0.7rem' }}
+                              />
+                            ))}
+                          </Box>
+                        </Grid>
+                        <Grid size={6}>
+                          <TextField
+                            fullWidth size="small"
+                            label="UPI Amount (₹)"
+                            value={mixedUpiAmount}
+                            disabled
+                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: 1, bgcolor: 'action.hover' } }}
+                          />
+                          <Typography variant="caption" sx={{ color: 'text.secondary', mt: 0.5, display: 'block' }}>
+                            Auto-calculated remainder
+                          </Typography>
+                        </Grid>
+                      </Grid>
+                    </Paper>
+                  )}
 
                   {/* Remarks Input */}
                   <TextField
@@ -1063,7 +1244,7 @@ const SellCounterTab = ({ residents, config, coupons, historyLoaded, loadCounter
                   />
 
                   {/* UPI QR Code Trigger Button */}
-                  {cart.reduce((sum, i) => sum + i.totalAmount, 0) > 0 && paymentMode?.toLowerCase() === 'upi' && (
+                  {cart.reduce((sum, i) => sum + i.totalAmount, 0) > 0 && (paymentMode?.toLowerCase() === 'upi' || (paymentMode === 'Cash + UPI' && mixedUpiAmount > 0)) && (
                     <Button
                       fullWidth
                       variant="outlined"
@@ -1072,12 +1253,12 @@ const SellCounterTab = ({ residents, config, coupons, historyLoaded, loadCounter
                       onClick={() => { setUpiPopupOpen(true); setHasShownUPIQR(true); }}
                       sx={{ fontWeight: 600, borderRadius: 1, mb: 2 }}
                     >
-                      Show UPI QR Code
+                      {paymentMode === 'Cash + UPI' ? `Show UPI QR (₹${mixedUpiAmount})` : 'Show UPI QR Code'}
                     </Button>
                   )}
 
                   {/* Counter Action Buttons */}
-                  {!(cart.reduce((sum, i) => sum + i.totalAmount, 0) > 0 && paymentMode?.toLowerCase() === 'upi' && !hasShownUPIQR) && (
+                  {!(cart.reduce((sum, i) => sum + i.totalAmount, 0) > 0 && (paymentMode?.toLowerCase() === 'upi' || (paymentMode === 'Cash + UPI' && mixedUpiAmount > 0)) && !hasShownUPIQR) && (
                   <Box sx={{ display: 'flex', gap: 1, flexDirection: 'column' }}>
                     <Button
                       variant="contained"
@@ -1129,7 +1310,7 @@ const SellCounterTab = ({ residents, config, coupons, historyLoaded, loadCounter
         <UpiQrDialog
           open={upiPopupOpen}
           onClose={() => setUpiPopupOpen(false)}
-          amount={cart.reduce((sum, i) => sum + i.totalAmount, 0)}
+          amount={paymentMode === 'Cash + UPI' ? mixedUpiAmount : cart.reduce((sum, i) => sum + i.totalAmount, 0)}
           flatNumber={selectedResident
             ? `${selectedResident.block}/${selectedResident.floor}${selectedResident.flatType}`
             : cart[0]?.flatNumber || ''}

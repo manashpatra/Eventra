@@ -64,6 +64,16 @@ const SalesHistoryTab = ({ coupons, config, historyLoading, loadHistoryData, isA
 
   const filteredCoupons = useMemo(() => {
     let filtered = [...coupons];
+    if (startDate) {
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      filtered = filtered.filter(c => c.createdAt && new Date(c.createdAt) >= start);
+    }
+    if (endDate) {
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      filtered = filtered.filter(c => c.createdAt && new Date(c.createdAt) <= end);
+    }
     if (searchTerm) {
       filtered = filtered.filter((c) => matchesFlatOrName(c, searchTerm));
     }
@@ -84,7 +94,10 @@ const SalesHistoryTab = ({ coupons, config, historyLoading, loadHistoryData, isA
     const totalAmount = filteredCoupons.reduce((sum, c) => sum + (c.totalAmount || 0), 0);
     const cashAmount = filteredCoupons
       .filter(c => c.paymentMode && c.paymentMode.toLowerCase() === 'cash')
-      .reduce((sum, c) => sum + (c.totalAmount || 0), 0);
+      .reduce((sum, c) => sum + (c.totalAmount || 0), 0)
+      + filteredCoupons
+      .filter(c => c.paymentMode === 'Cash + UPI')
+      .reduce((sum, c) => sum + (Number(c.mixedCashAmount) || 0), 0);
     const bankAmount = totalAmount - cashAmount;
     const totalDineOut = filteredCoupons.reduce((sum, c) => sum + (c.normalDineOutCount || 0) + (c.additionalDineOutCount || 0), 0);
     const totalParcel = filteredCoupons.reduce((sum, c) => sum + (c.normalParcelCount || 0) + (c.additionalParcelCount || 0), 0);
@@ -233,8 +246,24 @@ const SalesHistoryTab = ({ coupons, config, historyLoading, loadHistoryData, isA
 
     const residentName = sortedItems[0]?.residentName || '';
     const flatNumber = sortedItems[0]?.flatNumber || '';
-    const payMode = sortedItems[0]?.paymentMode || 'Cash';
+    const mixedCashTotal = sortedItems.reduce((s, c) => s + (Number(c.mixedCashAmount) || 0), 0);
+    const mixedUpiTotal = sortedItems.reduce((s, c) => s + (Number(c.mixedUpiAmount) || 0), 0);
     const totalPaid = sortedItems.reduce((s, c) => s + (c.totalAmount || 0), 0);
+
+    const allModes = [...new Set(sortedItems.map(c => c.paymentMode || 'Cash'))];
+    let payModeText = '';
+    if (allModes.length === 1) {
+      const mode = allModes[0];
+      payModeText = mode === 'Cash + UPI'
+        ? `Cash + UPI (Cash: ${formatCurrency(mixedCashTotal)}, UPI: ${formatCurrency(mixedUpiTotal)})`
+        : mode;
+    } else {
+      const cashOnlyTotal = sortedItems.filter(c => c.paymentMode?.toLowerCase() === 'cash').reduce((s, c) => s + (c.totalAmount || 0), 0);
+      const upiOnlyTotal = sortedItems.filter(c => c.paymentMode?.toLowerCase() === 'upi').reduce((s, c) => s + (c.totalAmount || 0), 0);
+      const totalCash = cashOnlyTotal + mixedCashTotal;
+      const totalUpi = upiOnlyTotal + mixedUpiTotal;
+      payModeText = `Multiple Modes (Cash: ${formatCurrency(totalCash)}, UPI: ${formatCurrency(totalUpi)})`;
+    }
 
     const headerHtml = getPrintHeaderHTML(config || {});
     const styles = getPrintHeaderStyles();
@@ -275,7 +304,7 @@ const SalesHistoryTab = ({ coupons, config, historyLoading, loadHistoryData, isA
           <div class="info-box">
             <strong>Flat Number:</strong> ${flatNumber}<br/>
             <strong>Resident Name:</strong> ${residentName}<br/>
-            <strong>Payment Mode:</strong> ${payMode}<br/>
+            <strong>Payment Mode:</strong> ${payModeText}<br/>
             <strong>Date & Time:</strong> ${formatDateTime(new Date(), config?.dateFormat)}
           </div>
           <div style="margin-top: 15px;">${itemsHtml}</div>
@@ -497,6 +526,7 @@ const SalesHistoryTab = ({ coupons, config, historyLoading, loadHistoryData, isA
                     <TableCell>Food Type</TableCell>
                     <TableCell>Plates Breakdown</TableCell>
                     <TableCell>Amount</TableCell>
+                    <TableCell>Payment Mode</TableCell>
                     <TableCell>Date</TableCell>
                     {!isAuditor && <TableCell align="right" sx={{ position: 'sticky', right: 0, zIndex: 2, backgroundColor: 'background.paper', borderLeft: '1px solid rgba(128,128,128,0.2)', whiteSpace: 'nowrap', width: 80, minWidth: 80 }}>Action</TableCell>}
                   </TableRow>
@@ -508,21 +538,43 @@ const SalesHistoryTab = ({ coupons, config, historyLoading, loadHistoryData, isA
                     acc[timeKey].coupons.push(c);
                     acc[timeKey].txTotalAmount += (c.totalAmount || 0);
                     return acc;
-                  }, {})).sort((a, b) => b.timeKey.localeCompare(a.timeKey)).map((group) => (
+                  }, {})).sort((a, b) => b.timeKey.localeCompare(a.timeKey)).map((group) => {
+                    const groupPayMode = group.coupons[0]?.paymentMode || 'Cash';
+                    const groupCash = group.coupons.reduce((sum, c) => sum + (Number(c.mixedCashAmount) || 0), 0);
+                    const groupUpi = group.coupons.reduce((sum, c) => sum + (Number(c.mixedUpiAmount) || 0), 0);
+                    const isMixed = groupPayMode === 'Cash + UPI';
+                    const isUpi = groupPayMode.toLowerCase() === 'upi';
+                    const isCash = groupPayMode.toLowerCase() === 'cash';
+                    const upiAmount = isMixed ? groupUpi : (isUpi ? group.txTotalAmount : 0);
+
+                    return (
                     <React.Fragment key={group.timeKey}>
                       <TableRow sx={{ bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)' }}>
-                        <TableCell colSpan={5}>
-                          <Typography variant="subtitle2" sx={{ color: 'text.secondary' }}>
-                            Transaction: {group.displayTime}
-                          </Typography>
+                        <TableCell colSpan={6}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                            <Typography variant="subtitle2" sx={{ color: 'text.secondary', fontWeight: 600 }}>
+                              Transaction: {group.displayTime}
+                            </Typography>
+                            <Chip
+                              label={isMixed ? `Cash + UPI (Cash: ${formatCurrency(groupCash)}, UPI: ${formatCurrency(groupUpi)})` : groupPayMode}
+                              size="small"
+                              sx={{
+                                fontSize: '0.7rem',
+                                height: 20,
+                                bgcolor: isMixed ? 'rgba(76,175,80,0.12)' : isCash ? 'rgba(33,150,243,0.12)' : 'rgba(156,39,176,0.12)',
+                                color: isMixed ? 'success.main' : isCash ? 'info.main' : 'secondary.main',
+                                fontWeight: 700,
+                              }}
+                            />
+                          </Box>
                         </TableCell>
                         <TableCell align="right">
-                          {!isAuditor && group.txTotalAmount > 0 && (
-                            <Tooltip title={`Show Consolidated UPI QR (${formatCurrency(group.txTotalAmount)})`}>
+                          {!isAuditor && upiAmount > 0 && (
+                            <Tooltip title={`Show UPI QR (${formatCurrency(upiAmount)})`}>
                               <IconButton 
                                 size="small" 
                                 color="secondary" 
-                                onClick={() => setQrDialog({ open: true, amount: group.txTotalAmount, flatNumber: detailsDialog.flatData?.flatNumber })}
+                                onClick={() => setQrDialog({ open: true, amount: upiAmount, flatNumber: detailsDialog.flatData?.flatNumber })}
                               >
                                 <QrCodeIcon fontSize="small" />
                               </IconButton>
@@ -553,6 +605,13 @@ const SalesHistoryTab = ({ coupons, config, historyLoading, loadHistoryData, isA
                         <Typography variant="body2" sx={{ fontWeight: 600, color: brand.gold }}>{formatCurrency(c.totalAmount)}</Typography>
                       </TableCell>
                       <TableCell>
+                        <Chip
+                          label={c.paymentMode === 'Cash + UPI' ? `Cash: ₹${c.mixedCashAmount || 0}, UPI: ₹${c.mixedUpiAmount || 0}` : (c.paymentMode || 'Cash')}
+                          size="small"
+                          sx={{ fontSize: '0.68rem', height: 20 }}
+                        />
+                      </TableCell>
+                      <TableCell>
                         <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                           {c.createdAt ? formatDateTime(c.createdAt, config?.dateFormat) : '-'}
                         </Typography>
@@ -575,7 +634,8 @@ const SalesHistoryTab = ({ coupons, config, historyLoading, loadHistoryData, isA
                     </TableRow>
                   ))}
                     </React.Fragment>
-                  ))}
+                  );
+                })}
                 </TableBody>
               </Table>
             </TableContainer>

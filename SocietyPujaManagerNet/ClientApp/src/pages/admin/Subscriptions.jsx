@@ -55,7 +55,7 @@ const Subscriptions = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { startProcessing, stopProcessing } = useProcessing();
-  const isAuditor = user?.role === 'Auditor';
+  const isAuditor = user?.role === 'Auditor' || user?.role === 'FoodCoupon';
   const isSuperAdmin = user?.role === 'Super Admin';
   const [residents, setResidents] = useState([]);
   const [config, setConfig] = useState(null);

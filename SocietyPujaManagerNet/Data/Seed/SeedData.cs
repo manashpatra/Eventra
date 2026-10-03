@@ -72,6 +72,18 @@ public static class SeedData
             CREATE INDEX IF NOT EXISTS ""IX_CashTransactions_MemberId"" ON ""CashTransactions"" (""MemberId"");
         ");
 
+        // Ensure FoodCoupons has MixedCashAmount and MixedUpiAmount columns
+        try
+        {
+            await db.Database.ExecuteSqlRawAsync(@"ALTER TABLE ""FoodCoupons"" ADD COLUMN ""MixedCashAmount"" TEXT NOT NULL DEFAULT '0';");
+        }
+        catch { }
+        try
+        {
+            await db.Database.ExecuteSqlRawAsync(@"ALTER TABLE ""FoodCoupons"" ADD COLUMN ""MixedUpiAmount"" TEXT NOT NULL DEFAULT '0';");
+        }
+        catch { }
+
         // Seed super admin user
         var adminEmail = "mpatradev@gmail.com";
         var existingAdmin = await userManager.FindByEmailAsync(adminEmail);
@@ -122,8 +134,8 @@ public static class SeedData
                 blocks = Enumerable.Range(1, 13).ToArray(),
                 floors = Enumerable.Range(1, 11).ToArray(),
                 flatTypes = new[] { "A", "B", "C", "D", "E", "F" },
-                paymentModes = new[] { "UPI", "Cash", "Cheque", "Net Banking" },
-                payees = new[] { "Cash Fund", "DCP Account" },
+                paymentModes = new[] { "UPI", "Cash", "Cheque", "Net Banking", "Cash + UPI" },
+                payees = new[] { "Cash Fund", "DPC Account" },
                 publicLanguages = new
                 {
                     enabled = true,

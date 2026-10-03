@@ -48,7 +48,7 @@ const Sponsorships = () => {
   const { startProcessing, stopProcessing } = useProcessing();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  const isAuditor = user?.role === 'Auditor';
+  const isAuditor = user?.role === 'Auditor' || user?.role === 'FoodCoupon';
   const isSuperAdmin = user?.role === 'Super Admin';
   const isFinanceUser = user?.role === 'Super Admin' || user?.role === 'Admin' || user?.role === 'Treasurer';
   const canEdit = isSuperAdmin || user?.role === 'Admin' || user?.role === 'Collection' || user?.role === 'Treasurer';

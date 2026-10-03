@@ -162,52 +162,214 @@ const Reports = () => {
     return Object.values(blocks).sort((a, b) => a.block - b.block);
   }, [filteredResidentsData]);
 
-  // Day-wise food coupon summary
+  // Day-wise food coupon summary (Sorted by Date ASC, with Breakfast, Lunch, Dinner for each day)
   const dayCouponSummary = useMemo(() => {
-    const days = {};
+    const configFoodDays = Array.isArray(config?.foodDays) ? config.foodDays : [];
+
+    // Map config food days by trimmed dayName
+    const dayConfigMap = new Map();
+    configFoodDays.forEach((d, idx) => {
+      if (d && d.dayName && String(d.dayName).trim()) {
+        const name = String(d.dayName).trim();
+        dayConfigMap.set(name, {
+          dayName: name,
+          date: d.date || '',
+          enabled: d.enabled !== false,
+          mealPrices: d.mealPrices || {},
+          configIndex: idx,
+        });
+      }
+    });
+
+    // Gather distinct days from filteredCoupons
+    const couponDaysSet = new Set();
     filteredCoupons.forEach(c => {
-      const key = `${c.day}-${c.mealType}`;
-      if (!days[key]) days[key] = { day: c.day, meal: c.mealType, veg: 0, khichuri: 0, lucchi: 0, chicken: 0, mutton: 0, nonVegOther: 0, nonVeg: 0, dineOut: 0, parcel: 0, amount: 0 };
+      const dName = (c.day || '').trim();
+      if (dName) couponDaysSet.add(dName);
+    });
+
+    // Collect all day names: all enabled days from config + any days that have coupons
+    const allDayNamesSet = new Set([
+      ...Array.from(dayConfigMap.values()).filter(d => d.enabled).map(d => d.dayName),
+      ...couponDaysSet,
+    ]);
+
+    // If config has days but enabled filter left it empty, include all config days with names
+    if (allDayNamesSet.size === 0 && dayConfigMap.size > 0) {
+      Array.from(dayConfigMap.keys()).forEach(name => allDayNamesSet.add(name));
+    }
+
+    // Helper to get date for a day
+    const getDayDate = (dayName) => {
+      const cfg = dayConfigMap.get(dayName);
+      if (cfg && cfg.date) return cfg.date;
+      // Fallback: check if any coupon has dayDate or date
+      const c = filteredCoupons.find(coupon => (coupon.day || '').trim() === dayName && (coupon.dayDate || coupon.date));
+      return c ? (c.dayDate || c.date) : '';
+    };
+
+    // Sort days chronologically ascending by Date
+    const sortedDayNames = Array.from(allDayNamesSet).sort((a, b) => {
+      const dateA = getDayDate(a);
+      const dateB = getDayDate(b);
+
+      const timeA = dateA ? new Date(dateA).getTime() : NaN;
+      const timeB = dateB ? new Date(dateB).getTime() : NaN;
+
+      const validA = !isNaN(timeA);
+      const validB = !isNaN(timeB);
+
+      if (validA && validB) {
+        if (timeA !== timeB) return timeA - timeB;
+      } else if (validA && !validB) {
+        return -1;
+      } else if (!validA && validB) {
+        return 1;
+      }
+
+      // If dates match or are missing, preserve config index
+      const idxA = dayConfigMap.has(a) ? dayConfigMap.get(a).configIndex : 999;
+      const idxB = dayConfigMap.has(b) ? dayConfigMap.get(b).configIndex : 999;
+      if (idxA !== idxB) return idxA - idxB;
+
+      return a.localeCompare(b);
+    });
+
+    const standardMeals = ['Breakfast', 'Lunch', 'Dinner'];
+    const mealOrder = { 'Breakfast': 1, 'Lunch': 2, 'Dinner': 3 };
+
+    // Initialize rows in sorted day order, and for each day, Breakfast, Lunch, Dinner
+    const rowsMap = new Map();
+    const rows = [];
+
+    sortedDayNames.forEach(dayName => {
+      const dayDate = getDayDate(dayName);
+
+      // Determine meals for this day: standard Breakfast, Lunch, Dinner
+      const dayMealsSet = new Set(standardMeals);
+
+      // If any coupons exist for this day with a custom mealType, include that too
+      filteredCoupons.forEach(c => {
+        if ((c.day || '').trim() === dayName && c.mealType && c.mealType.trim()) {
+          dayMealsSet.add(c.mealType.trim());
+        }
+      });
+
+      const dayMeals = Array.from(dayMealsSet).sort((m1, m2) => {
+        const o1 = mealOrder[m1] || 99;
+        const o2 = mealOrder[m2] || 99;
+        if (o1 !== o2) return o1 - o2;
+        return m1.localeCompare(m2);
+      });
+
+      dayMeals.forEach(meal => {
+        const key = `${dayName}-${meal}`;
+        const row = {
+          day: dayName,
+          date: dayDate,
+          meal,
+          veg: 0,
+          khichuri: 0,
+          lucchi: 0,
+          chicken: 0,
+          mutton: 0,
+          nonVegOther: 0,
+          nonVeg: 0,
+          dineOut: 0,
+          parcel: 0,
+          amount: 0,
+        };
+        rowsMap.set(key, row);
+        rows.push(row);
+      });
+    });
+
+    // Populate rows with coupon sales
+    filteredCoupons.forEach(c => {
+      const dName = (c.day || '').trim();
+      const mName = (c.mealType || '').trim();
+      const key = `${dName}-${mName}`;
+
+      let row = rowsMap.get(key);
+      if (!row) {
+        // Fallback in case of any coupon with unexpected day/meal
+        row = {
+          day: dName || 'Unknown',
+          date: c.dayDate || c.date || '',
+          meal: mName || 'Unknown',
+          veg: 0,
+          khichuri: 0,
+          lucchi: 0,
+          chicken: 0,
+          mutton: 0,
+          nonVegOther: 0,
+          nonVeg: 0,
+          dineOut: 0,
+          parcel: 0,
+          amount: 0,
+        };
+        rowsMap.set(key, row);
+        rows.push(row);
+      }
 
       const totalDineOut = (c.normalDineOutCount || 0) + (c.additionalDineOutCount || 0);
       const totalParcel = (c.normalParcelCount || 0) + (c.additionalParcelCount || 0);
       const totalPlates = totalDineOut + totalParcel;
 
       if (c.foodType === 'Veg') {
-        days[key].veg += totalPlates;
+        row.veg += totalPlates;
       } else if (c.foodType === 'Khichuri') {
-        days[key].khichuri += totalPlates;
+        row.khichuri += totalPlates;
       } else if (c.foodType === 'Lucchi') {
-        days[key].lucchi += totalPlates;
+        row.lucchi += totalPlates;
       } else if (c.foodType === 'Chicken') {
-        days[key].chicken += totalPlates;
-        days[key].nonVeg += totalPlates;
+        row.chicken += totalPlates;
+        row.nonVeg += totalPlates;
       } else if (c.foodType === 'Mutton') {
-        days[key].mutton += totalPlates;
-        days[key].nonVeg += totalPlates;
+        row.mutton += totalPlates;
+        row.nonVeg += totalPlates;
       } else {
-        days[key].nonVegOther += totalPlates;
-        days[key].nonVeg += totalPlates;
+        row.nonVegOther += totalPlates;
+        row.nonVeg += totalPlates;
       }
 
-      days[key].dineOut += totalDineOut;
-      days[key].parcel += totalParcel;
-      days[key].amount += c.totalAmount || 0;
+      row.dineOut += totalDineOut;
+      row.parcel += totalParcel;
+      row.amount += c.totalAmount || 0;
     });
-    return Object.values(days);
-  }, [filteredCoupons]);
+
+    return rows;
+  }, [filteredCoupons, config]);
 
   // Payment mode breakdown
   const paymentModeSummary = useMemo(() => {
     const modes = {};
+    const addMode = (mode, amount) => {
+      const m = mode || 'Unknown';
+      if (!modes[m]) modes[m] = { mode: m, count: 0, amount: 0 };
+      modes[m].count++;
+      modes[m].amount += amount || 0;
+    };
+
     [...filteredResidentsData.filter(r => r.subscriptionStatus === 'paid'), ...filteredDonations, ...filteredSouvenirs, ...filteredSponsorships.filter(s => s.status === 'Received')].forEach(item => {
-      const mode = item.paymentMode || 'Unknown';
-      if (!modes[mode]) modes[mode] = { mode, count: 0, amount: 0 };
-      modes[mode].count++;
-      modes[mode].amount += item.subscriptionAmount || item.amount || 0;
+      addMode(item.paymentMode || 'Unknown', item.subscriptionAmount || item.amount || 0);
     });
+
+    filteredCoupons.forEach(c => {
+      if (c.paymentMode === 'FOC') return;
+      if (c.paymentMode === 'Cash + UPI') {
+        const total = Number(c.totalAmount) || 0;
+        const cashPart = Math.min(total, Number(c.mixedCashAmount) || 0);
+        const upiPart = total - cashPart;
+        if (cashPart > 0) addMode('Cash', cashPart);
+        if (upiPart > 0) addMode('UPI', upiPart);
+      } else {
+        addMode(c.paymentMode || 'Cash', c.totalAmount || 0);
+      }
+    });
+
     return Object.values(modes);
-  }, [filteredResidentsData, filteredDonations, filteredSouvenirs, filteredSponsorships]);
+  }, [filteredResidentsData, filteredDonations, filteredSouvenirs, filteredSponsorships, filteredCoupons]);
 
   const filteredPaidResidents = useMemo(() => {
     let paid = residents.filter(r => r.subscriptionStatus === 'paid');
@@ -252,7 +414,7 @@ const Reports = () => {
       let subName = 'Cash';
 
       const pMode = (mode || '').toLowerCase();
-      if (pMode.includes('cash')) subName = 'Cash';
+      if (pMode === 'cash' || (pMode.includes('cash') && pMode !== 'cash + upi')) subName = 'Cash';
       else subName = 'Bank';
 
       if (!cats[catName]) {
@@ -281,7 +443,34 @@ const Reports = () => {
       addIncome('Sponsorships', s.paymentMode, s.amount);
     });
     filteredCoupons.forEach(c => {
-      addIncome('Food Coupons', c.paymentMode || 'Cash', c.totalAmount);
+      if (c.paymentMode === 'Cash + UPI') {
+        const total = Number(c.totalAmount) || 0;
+        const cashPart = Math.min(total, Number(c.mixedCashAmount) || 0);
+        const bankPart = total - cashPart;
+
+        if (!cats['Food Coupons']) {
+          cats['Food Coupons'] = { category: 'Food Coupons', count: 0, amount: 0, subCategories: {} };
+        }
+        cats['Food Coupons'].count++;
+        cats['Food Coupons'].amount += total;
+
+        if (cashPart > 0) {
+          if (!cats['Food Coupons'].subCategories['Cash']) {
+            cats['Food Coupons'].subCategories['Cash'] = { subCategory: 'Cash', count: 0, amount: 0 };
+          }
+          cats['Food Coupons'].subCategories['Cash'].count++;
+          cats['Food Coupons'].subCategories['Cash'].amount += cashPart;
+        }
+        if (bankPart > 0) {
+          if (!cats['Food Coupons'].subCategories['Bank']) {
+            cats['Food Coupons'].subCategories['Bank'] = { subCategory: 'Bank', count: 0, amount: 0 };
+          }
+          cats['Food Coupons'].subCategories['Bank'].count++;
+          cats['Food Coupons'].subCategories['Bank'].amount += bankPart;
+        }
+      } else {
+        addIncome('Food Coupons', c.paymentMode || 'Cash', c.totalAmount);
+      }
     });
 
     return Object.values(cats).map(cat => ({
@@ -452,7 +641,7 @@ const Reports = () => {
       {activeTab === 4 && <FoodCouponReportTab dayCouponSummary={dayCouponSummary} config={config} fmt={fmt} printReport={printReport} exportCSV={exportCSV} />}
       {activeTab === 5 && <ExpenseSubCategoryReportTab filteredExpenses={filteredExpenses} config={config} fmt={fmt} printReport={printReport} exportCSV={exportCSV} />}
       {activeTab === 6 && <IncomeSubCategoryReportTab incomeSubCategorySummary={incomeSubCategorySummary} config={config} fmt={fmt} printReport={printReport} exportCSV={exportCSV} />}
-      {activeTab === 7 && <PaymentModeReportTab paymentModeSummary={paymentModeSummary} config={config} fmt={fmt} printReport={printReport} />}
+      {activeTab === 7 && <PaymentModeReportTab paymentModeSummary={paymentModeSummary} config={config} fmt={fmt} printReport={printReport} exportCSV={exportCSV} />}
       {activeTab === 8 && <BlockSubscriptionReportTab blockSummary={blockSummary} config={config} fmt={fmt} printReport={printReport} exportCSV={exportCSV} />}
     </Box>
   );

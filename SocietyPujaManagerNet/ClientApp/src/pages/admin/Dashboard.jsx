@@ -161,7 +161,7 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const isAuditor = user?.role === 'Auditor';
-  const isFinanceUser = user?.role === 'Super Admin' || user?.role === 'Admin' || user?.role === 'Treasurer' || isAuditor;
+  const isFinanceUser = user?.role === 'Super Admin' || user?.role === 'Admin' || user?.role === 'Treasurer' || isAuditor || user?.role === 'FoodCoupon';
   const isStandard = user?.role === 'Standard';
   const isCultural = user?.role === 'Cultural';
   const isSponsorUser = user?.role === 'Collection';

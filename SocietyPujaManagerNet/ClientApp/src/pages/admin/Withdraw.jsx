@@ -13,7 +13,7 @@ import { status } from '../../theme/colorTokens';
 
 const Withdraw = () => {
   const { user } = useAuth();
-  const isAuditor = user?.role === 'Auditor';
+  const isAuditor = user?.role === 'Auditor' || user?.role === 'FoodCoupon';
   const [transactions, setTransactions] = useState([]);
   const [vendors, setVendors] = useState([]);
   const [loading, setLoading] = useState(true);

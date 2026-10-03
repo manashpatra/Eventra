@@ -110,22 +110,23 @@ const AppRoutes = () => (
       }
     >
       <Route path="/dashboard" element={<Dashboard />} />
-      <Route path="/subscriptions" element={<RoleRoute allowedRoles={['Super Admin', 'Admin', 'Treasurer', 'Auditor']}><Subscriptions /></RoleRoute>} />
+      <Route path="/subscriptions" element={<RoleRoute allowedRoles={['Super Admin', 'Admin', 'Treasurer', 'Auditor', 'FoodCoupon']}><Subscriptions /></RoleRoute>} />
       <Route path="/food-coupons" element={<RoleRoute allowedRoles={['Super Admin', 'Admin', 'Treasurer', 'FoodCoupon', 'Auditor', 'Food Seller']}><FoodCoupons /></RoleRoute>} />
+      <Route path="/food-coupons/drafts" element={<RoleRoute allowedRoles={['Super Admin', 'Admin', 'Treasurer', 'FoodCoupon', 'Auditor']}><FoodCoupons /></RoleRoute>} />
       <Route path="/food-coupons/history" element={<RoleRoute allowedRoles={['Super Admin', 'Admin', 'Treasurer', 'FoodCoupon', 'Auditor']}><FoodCoupons /></RoleRoute>} />
       <Route path="/food-coupons/dashboard" element={<RoleRoute allowedRoles={['Super Admin', 'Admin', 'Treasurer', 'FoodCoupon', 'Auditor']}><FoodCoupons /></RoleRoute>} />
       <Route path="/food-coupons/foc" element={<RoleRoute allowedRoles={['Super Admin', 'Admin', 'Treasurer', 'FoodCoupon', 'Auditor']}><FoodCoupons /></RoleRoute>} />
       <Route path="/food-coupons/online-dashboard" element={<RoleRoute allowedRoles={['Super Admin', 'Admin', 'Treasurer', 'FoodCoupon', 'Auditor']}><FoodCoupons /></RoleRoute>} />
       <Route path="/food-coupons/redemptions" element={<RoleRoute allowedRoles={['Super Admin', 'Admin', 'Treasurer', 'FoodCoupon', 'Auditor', 'Food Seller']}><FoodCoupons /></RoleRoute>} />
       <Route path="/scanner" element={<RoleRoute allowedRoles={['Super Admin', 'Admin', 'Treasurer', 'FoodCoupon', 'Food Seller']}><Scanner /></RoleRoute>} />
-      <Route path="/donations" element={<RoleRoute allowedRoles={['Super Admin', 'Admin', 'Treasurer', 'Auditor']}><Donations /></RoleRoute>} />
-      <Route path="/souvenirs" element={<RoleRoute allowedRoles={['Super Admin', 'Admin', 'Treasurer', 'Auditor']}><Souvenirs /></RoleRoute>} />
-      <Route path="/sponsorships" element={<RoleRoute allowedRoles={['Super Admin', 'Admin', 'Treasurer', 'Auditor', 'Collection']}><Sponsorships /></RoleRoute>} />
-      <Route path="/expenses" element={<RoleRoute allowedRoles={['Super Admin', 'Admin', 'Treasurer', 'Auditor']}><Expenses /></RoleRoute>} />
-      <Route path="/withdrawals" element={<RoleRoute allowedRoles={['Super Admin', 'Admin', 'Treasurer', 'Auditor']}><Withdraw /></RoleRoute>} />
+      <Route path="/donations" element={<RoleRoute allowedRoles={['Super Admin', 'Admin', 'Treasurer', 'Auditor', 'FoodCoupon']}><Donations /></RoleRoute>} />
+      <Route path="/souvenirs" element={<RoleRoute allowedRoles={['Super Admin', 'Admin', 'Treasurer', 'Auditor', 'FoodCoupon']}><Souvenirs /></RoleRoute>} />
+      <Route path="/sponsorships" element={<RoleRoute allowedRoles={['Super Admin', 'Admin', 'Treasurer', 'Auditor', 'Collection', 'FoodCoupon']}><Sponsorships /></RoleRoute>} />
+      <Route path="/expenses" element={<RoleRoute allowedRoles={['Super Admin', 'Admin', 'Treasurer', 'Auditor', 'FoodCoupon']}><Expenses /></RoleRoute>} />
+      <Route path="/withdrawals" element={<RoleRoute allowedRoles={['Super Admin', 'Admin', 'Treasurer', 'Auditor', 'FoodCoupon']}><Withdraw /></RoleRoute>} />
       <Route path="/cheque-transactions" element={<Navigate to="/withdrawals" replace />} />
-      <Route path="/admin-reports" element={<RoleRoute allowedRoles={['Super Admin', 'Admin', 'Treasurer', 'Auditor']}><Reports /></RoleRoute>} />
-      <Route path="/admin-reports/:tab" element={<RoleRoute allowedRoles={['Super Admin', 'Admin', 'Treasurer', 'Auditor']}><Reports /></RoleRoute>} />
+      <Route path="/admin-reports" element={<RoleRoute allowedRoles={['Super Admin', 'Admin', 'Treasurer', 'Auditor', 'FoodCoupon']}><Reports /></RoleRoute>} />
+      <Route path="/admin-reports/:tab" element={<RoleRoute allowedRoles={['Super Admin', 'Admin', 'Treasurer', 'Auditor', 'FoodCoupon']}><Reports /></RoleRoute>} />
       <Route path="/feedback-inbox" element={<RoleRoute allowedRoles={['Super Admin', 'Admin', 'Treasurer', 'FoodCoupon', 'Auditor', 'Standard', 'Cultural']}><AdminFeedback /></RoleRoute>} />
       <Route path="/publish-notices" element={<RoleRoute allowedRoles={['Super Admin', 'Admin', 'Treasurer', 'FoodCoupon', 'Standard']}><PublishNotices /></RoleRoute>} />
       <Route path="/settings" element={<RoleRoute allowedRoles={['Super Admin']}><MasterSettings /></RoleRoute>} />

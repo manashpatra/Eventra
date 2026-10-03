@@ -379,7 +379,8 @@ const MyFoodSection = () => {
     }
 
     setDraftCart(validItems);
-    setDraftPaymentMode(pendingDraft.paymentMode || 'Cash');
+    const safeMode = ['Cash', 'UPI'].includes(pendingDraft.paymentMode) ? pendingDraft.paymentMode : 'Cash';
+    setDraftPaymentMode(safeMode);
     setIsEditingDraft(true);
     setEditingDraftId(pendingDraft.id);
   };
@@ -760,7 +761,7 @@ const MyFoodSection = () => {
                                       onChange={(e) => setDraftPaymentMode(e.target.value)}
                                       sx={{ fontSize: '0.8rem', borderRadius: '8px' }}
                                     >
-                                      {(appConfig?.paymentModes || ['UPI', 'Cash', 'Cheque', 'Net Banking']).map((mode) => (
+                                      {['Cash', 'UPI'].map((mode) => (
                                         <MenuItem key={mode} value={mode} sx={{ fontSize: '0.8rem' }}>{mode}</MenuItem>
                                       ))}
                                     </Select>

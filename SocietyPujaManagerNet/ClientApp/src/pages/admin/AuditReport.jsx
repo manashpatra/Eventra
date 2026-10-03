@@ -154,75 +154,136 @@ const AuditReport = () => {
     <Box>
       {/* Filter Panel */}
       <Card sx={{ mb: 3 }}>
-        <CardContent sx={{ p: 2 }}>
-          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
-            <FormControl size="small" sx={{ minWidth: 200 }}>
-              <InputLabel>User</InputLabel>
-              <Select value={filterUser} onChange={(e) => setFilterUser(e.target.value)} label="User">
-                <MenuItem value="all">All Users</MenuItem>
-                {userList.map((u) => (
-                  <MenuItem key={u.email} value={u.email}>
-                    {u.email} ({u.role || 'N/A'})
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <FormControl size="small" sx={{ minWidth: 120 }}>
-              <InputLabel>Type</InputLabel>
-              <Select value={filterAction} onChange={(e) => setFilterAction(e.target.value)} label="Type">
-                <MenuItem value="all">All Types</MenuItem>
-                <MenuItem value="CREATE">Insert</MenuItem>
-                <MenuItem value="UPDATE">Update</MenuItem>
-                <MenuItem value="DELETE">Delete</MenuItem>
-              </Select>
-            </FormControl>
-            <FormControl size="small" sx={{ minWidth: 140 }}>
-              <InputLabel>Page</InputLabel>
-              <Select value={filterEntity} onChange={(e) => setFilterEntity(e.target.value)} label="Page">
-                <MenuItem value="all">All Pages</MenuItem>
-                <MenuItem value="Donation">Donation</MenuItem>
-                <MenuItem value="Expense">Expense</MenuItem>
-                <MenuItem value="Sponsorship">Sponsorship</MenuItem>
-                <MenuItem value="Subscription">Subscription</MenuItem>
-                <MenuItem value="FoodCoupon">Food Coupon</MenuItem>
-                <MenuItem value="Resident">Resident</MenuItem>
-              </Select>
-            </FormControl>
-            <DatePicker
-              label="From Date"
-              value={startDate}
-              onChange={(newValue) => setStartDate(newValue)}
-              format={getDatePickerFormat(config?.dateFormat)}
-              sx={{ width: { xs: 'calc(50% - 8px)', sm: 190 } }} slotProps={{ actionBar: { actions: ['clear', 'cancel', 'accept'] }, textField: { size: 'small' } }}
-            />
-            <DatePicker
-              label="To Date"
-              value={endDate}
-              onChange={(newValue) => setEndDate(newValue)}
-              format={getDatePickerFormat(config?.dateFormat)}
-              sx={{ width: { xs: 'calc(50% - 8px)', sm: 190 } }} slotProps={{ actionBar: { actions: ['clear', 'cancel', 'accept'] }, textField: { size: 'small' } }}
-            />
-            <Box sx={{ display: 'flex', gap: 1, ml: 'auto' }}>
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={<ClearIcon />}
-                onClick={handleClearFilters}
-                sx={{ borderColor: 'rgba(255,255,255,0.12)', color: 'text.secondary' }}
+        <CardContent sx={{ p: { xs: 1.5, sm: 2 }, '&:last-child': { pb: { xs: 1.5, sm: 2 } } }}>
+          <Grid container columns={24} spacing={{ xs: 1.5, sm: 1.5, lg: 1.5 }} sx={{ alignItems: 'center' }}>
+            <Grid size={{ xs: 12, sm: 6, md: 6, lg: 3 }}>
+              <FormControl fullWidth size="small">
+                <InputLabel id="audit-type-label">Type</InputLabel>
+                <Select
+                  labelId="audit-type-label"
+                  value={filterAction}
+                  onChange={(e) => setFilterAction(e.target.value)}
+                  label="Type"
+                >
+                  <MenuItem value="all">All Types</MenuItem>
+                  <MenuItem value="CREATE">Insert</MenuItem>
+                  <MenuItem value="UPDATE">Update</MenuItem>
+                  <MenuItem value="DELETE">Delete</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+
+            <Grid size={{ xs: 12, sm: 6, md: 6, lg: 3 }}>
+              <FormControl fullWidth size="small">
+                <InputLabel id="audit-page-label">Page</InputLabel>
+                <Select
+                  labelId="audit-page-label"
+                  value={filterEntity}
+                  onChange={(e) => setFilterEntity(e.target.value)}
+                  label="Page"
+                >
+                  <MenuItem value="all">All Pages</MenuItem>
+                  <MenuItem value="Donation">Donation</MenuItem>
+                  <MenuItem value="Expense">Expense</MenuItem>
+                  <MenuItem value="Sponsorship">Sponsorship</MenuItem>
+                  <MenuItem value="Subscription">Subscription</MenuItem>
+                  <MenuItem value="FoodCoupon">Food Coupon</MenuItem>
+                  <MenuItem value="Resident">Resident</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+
+            <Grid size={{ xs: 12, sm: 6, md: 6, lg: 4 }}>
+              <DatePicker
+                label="From Date"
+                value={startDate}
+                onChange={(newValue) => setStartDate(newValue)}
+                format={getDatePickerFormat(config?.dateFormat)}
+                sx={{ width: '100%' }}
+                slotProps={{
+                  actionBar: { actions: ['clear', 'cancel', 'accept'] },
+                  textField: { size: 'small', fullWidth: true },
+                }}
+              />
+            </Grid>
+
+            <Grid size={{ xs: 12, sm: 6, md: 6, lg: 4 }}>
+              <DatePicker
+                label="To Date"
+                value={endDate}
+                onChange={(newValue) => setEndDate(newValue)}
+                format={getDatePickerFormat(config?.dateFormat)}
+                sx={{ width: '100%' }}
+                slotProps={{
+                  actionBar: { actions: ['clear', 'cancel', 'accept'] },
+                  textField: { size: 'small', fullWidth: true },
+                }}
+              />
+            </Grid>
+
+            <Grid size={{ xs: 12, sm: 12, md: 12, lg: 5 }}>
+              <FormControl fullWidth size="small">
+                <InputLabel id="audit-user-label">User</InputLabel>
+                <Select
+                  labelId="audit-user-label"
+                  value={filterUser}
+                  onChange={(e) => setFilterUser(e.target.value)}
+                  label="User"
+                >
+                  <MenuItem value="all">All Users</MenuItem>
+                  {userList.map((u) => (
+                    <MenuItem key={u.email} value={u.email}>
+                      {u.email} ({u.role || 'N/A'})
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+
+            <Grid size={{ xs: 12, sm: 12, md: 12, lg: 5 }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  gap: { xs: 0.75, sm: 1 },
+                  justifyContent: 'flex-end',
+                  alignItems: 'center',
+                  width: '100%',
+                }}
               >
-                Clear
-              </Button>
-              <Button
-                variant="contained"
-                size="small"
-                startIcon={loading ? <CircularProgress size={16} color="inherit" /> : <SearchIcon />}
-                onClick={handleSearch}
-                disabled={loading}
-              >
-                {loading ? 'Searching...' : 'Search'}
-              </Button>
-            </Box>
-          </Box>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<ClearIcon sx={{ fontSize: { xs: 16, sm: 18 } }} />}
+                  onClick={handleClearFilters}
+                  sx={{
+                    borderColor: 'rgba(255,255,255,0.12)',
+                    color: 'text.secondary',
+                    minHeight: 40,
+                    whiteSpace: 'nowrap',
+                    px: { xs: 1, sm: 1.5 },
+                    fontSize: { xs: '0.75rem', sm: '0.8125rem' },
+                  }}
+                >
+                  Clear
+                </Button>
+                <Button
+                  variant="contained"
+                  size="small"
+                  startIcon={loading ? <CircularProgress size={14} color="inherit" /> : <SearchIcon sx={{ fontSize: { xs: 16, sm: 18 } }} />}
+                  onClick={handleSearch}
+                  disabled={loading}
+                  sx={{
+                    minHeight: 40,
+                    px: { xs: 1.25, sm: 2 },
+                    fontSize: { xs: '0.75rem', sm: '0.8125rem' },
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {loading ? 'Searching...' : 'Search'}
+                </Button>
+              </Box>
+            </Grid>
+          </Grid>
         </CardContent>
       </Card>
 
@@ -272,7 +333,7 @@ const AuditReport = () => {
       {searched && (
         <Card>
           <TableContainer sx={{ maxHeight: '55vh' }}>
-            <Table size="small" stickyHeader>
+            <Table size="small" stickyHeader sx={{ minWidth: 650 }}>
               <TableHead>
                 <TableRow>
                   <TableCell>Timestamp</TableCell>

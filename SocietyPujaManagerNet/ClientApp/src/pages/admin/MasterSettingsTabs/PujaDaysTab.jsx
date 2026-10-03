@@ -44,7 +44,7 @@ const PujaDaysTab = ({ config, setConfig, addFoodDay, updateFoodDay, removeFoodD
               />
             )}
           </Box>
-          <Grid container spacing={2.5}>
+          <Grid container spacing={2.5} sx={{ alignItems: 'center' }}>
             <Grid size={{ xs: 12, md: 4 }}>
               <FormControl fullWidth size="small">
                 <InputLabel id="puja-name-select-label">Puja / Festival Name</InputLabel>

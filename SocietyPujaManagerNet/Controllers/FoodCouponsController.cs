@@ -248,6 +248,9 @@ public class FoodCouponsController : ControllerBase
         string residentName = body.TryGetProperty("residentName", out var rn) ? rn.GetString() ?? "" : "";
         string accessCode = body.TryGetProperty("accessCode", out var ac) ? ac.GetString() ?? "" : "";
         string paymentMode = body.TryGetProperty("paymentMode", out var pm) ? pm.GetString() ?? "Cash" : "Cash";
+        decimal mixedCashAmount = body.TryGetProperty("mixedCashAmount", out var mca) ? mca.GetDecimal() : 0;
+        decimal mixedUpiAmount = body.TryGetProperty("mixedUpiAmount", out var mua) ? mua.GetDecimal() : 0;
+        bool isMixed = paymentMode == "Cash + UPI" && mixedCashAmount > 0;
         string remarks = body.TryGetProperty("remarks", out var rem) ? rem.GetString() ?? "" : "";
         string issuedBy = body.TryGetProperty("issuedBy", out var ib) ? ib.GetString() ?? "" : "";
 
@@ -283,8 +286,36 @@ public class FoodCouponsController : ControllerBase
 
         if (body.TryGetProperty("cartItems", out var itemsElement) && itemsElement.ValueKind == JsonValueKind.Array)
         {
-            foreach (var item in itemsElement.EnumerateArray())
+            var itemsList = itemsElement.EnumerateArray().ToList();
+            decimal cartGrandTotal = itemsList.Sum(i => i.TryGetProperty("totalAmount", out var ta) ? ta.GetDecimal() : 0);
+            decimal remainingCartCash = isMixed ? mixedCashAmount : 0;
+
+            for (int itemIdx = 0; itemIdx < itemsList.Count; itemIdx++)
             {
+                var item = itemsList[itemIdx];
+                decimal totalItemAmount = item.TryGetProperty("totalAmount", out var ta) ? ta.GetDecimal() : 0;
+                
+                decimal itemCash = 0;
+                decimal itemUpi = 0;
+                if (item.TryGetProperty("mixedCashAmount", out var imca))
+                {
+                    itemCash = imca.GetDecimal();
+                    itemUpi = item.TryGetProperty("mixedUpiAmount", out var imua) ? imua.GetDecimal() : Math.Max(0, totalItemAmount - itemCash);
+                }
+                else if (isMixed)
+                {
+                    if (itemIdx == itemsList.Count - 1)
+                    {
+                        itemCash = remainingCartCash;
+                    }
+                    else
+                    {
+                        itemCash = cartGrandTotal > 0 ? Math.Min(remainingCartCash, Math.Round((totalItemAmount / cartGrandTotal) * mixedCashAmount)) : 0;
+                        remainingCartCash -= itemCash;
+                    }
+                    itemUpi = Math.Max(0, totalItemAmount - itemCash);
+                }
+
                 var coupon = new FoodCoupon
                 {
                     Id = Guid.NewGuid().ToString(),
@@ -304,9 +335,11 @@ public class FoodCouponsController : ControllerBase
                     NormalPrice = item.TryGetProperty("normalPrice", out var npri) ? npri.GetDecimal() : 0,
                     AdditionalPrice = item.TryGetProperty("additionalPrice", out var apri) ? apri.GetDecimal() : 0,
                     ParcelPackingCharge = item.TryGetProperty("parcelPackingCharge", out var ppc) ? ppc.GetDecimal() : 0,
-                    TotalAmount = item.TryGetProperty("totalAmount", out var ta) ? ta.GetDecimal() : 0,
+                    TotalAmount = totalItemAmount,
                     FocValue = item.TryGetProperty("focValue", out var fv) ? fv.GetDecimal() : 0,
                     PaymentMode = paymentMode,
+                    MixedCashAmount = itemCash,
+                    MixedUpiAmount = itemUpi,
                     Remarks = remarks,
                     IssuedBy = issuedBy,
                     CouponNumbers = item.TryGetProperty("couponNumbers", out var cn) ? cn.GetString() ?? "" : "",
